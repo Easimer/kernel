@@ -1,0 +1,7 @@
+boot.iso
+*.c.o
+*.cpp.o
+*.S.o
+kernel-*.img
+grub/isoroot/
+*.swp
