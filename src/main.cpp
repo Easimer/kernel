@@ -7,6 +7,10 @@
 #include "memory.h"
 #include "interrupts.h"
 #include "timer.h"
+#include "pci.h"
+
+extern "C" void _init();
+extern "C" void _fini();
 
 extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     SSE_Setup();
@@ -25,6 +29,12 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
         ASSERT(!"Didn't boot from a Multiboot2 bootloader");
     }
 
+    _init();
+
+    PCI_Enumerate();
+
     while(1) {
     }
+
+    _fini();
 }

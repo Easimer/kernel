@@ -2,15 +2,18 @@ CC=i686-elf-gcc
 CXX=i686-elf-g++
 CCFLAGS=-std=gnu99 -ffreestanding -O2 -Wall -Wextra
 CXXFLAGS=-std=c++17 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
+
+CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
+CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)
+
 VERSION=0.1
 KERNEL_FILENAME=kernel-$(VERSION).img
-
-KERNEL_OBJECTS=boot.S.o main.cpp.o pc_vga.cpp.o logging.cpp.o port_io.S.o uart.cpp.o multiboot2.cpp.o utils.cpp.o memory.cpp.o interrupts.cpp.o interrupts.S.o timer.cpp.o simd.S.o
+KERNEL_OBJECTS=boot.S.o main.cpp.o pc_vga.cpp.o logging.cpp.o port_io.S.o uart.cpp.o multiboot2.cpp.o utils.cpp.o memory.cpp.o interrupts.cpp.o interrupts.S.o timer.cpp.o simd.S.o pci.cpp.o
 
 all: $(KERNEL_FILENAME) boot.iso
 
 $(KERNEL_FILENAME): $(KERNEL_OBJECTS) linker.ld
-	$(CXX) -T linker.ld -o $(KERNEL_FILENAME) -ffreestanding -nostdlib $(KERNEL_OBJECTS) -lgcc
+	$(CXX) -T linker.ld -o $(KERNEL_FILENAME) -ffreestanding -nostdlib crti.S.o $(CRTBEGIN_OBJ) $(KERNEL_OBJECTS) $(CRTEND_OBJ) crtn.S.o crtn.S.o -lgcc
 
 %.S.o: %.S
 	nasm -f elf32 -o $@ $<
