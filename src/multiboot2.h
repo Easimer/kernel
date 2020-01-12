@@ -10,9 +10,13 @@ struct MB2_Header {
     u32 total_size, reserved;
 };
 
+static_assert(sizeof(MB2_Header) == 8);
+
 struct MB2_Tag_Header {
     u32 type, size;
 };
+
+static_assert(sizeof(MB2_Tag_Header) == 8);
 
 struct MB2_Tag_Memory_Map {
     MB2_Tag_Header hdr;
