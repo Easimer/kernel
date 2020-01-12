@@ -5,6 +5,7 @@
 #include "logging.h"
 #include "port_io.h"
 #include "timer.h"
+#include "utils.h"
 
 #define ATA_REG_DATA       0x00
 #define ATA_REG_ERROR      0x01
@@ -180,15 +181,28 @@ static void ReadBuffer(IDE_Controller* ctrl, u8 channel, u8 reg, u32* buffer, u3
     }
 }
 
-static u8 Poll(IDE_Controller* ctrl, u8 ch, u32 advanced_check) {
-    for(int i = 0; i < 4; i++) {
-        ReadRegister(ctrl, ch, ATA_REG_ALTSTATUS);
+static u8 ReadStatus(IDE_Controller* ctrl, u8 channel) {
+    u8 ret;
+    for(int i = 0; i < 5; i++) {
+        ret = ReadRegister(ctrl, channel, ATA_REG_STATUS);
     }
+    return ret;
+}
 
-    while(ReadRegister(ctrl, ch, ATA_REG_STATUS) & ATA_SR_BSY);
+static u8 Poll(IDE_Controller* ctrl, u8 ch, u32 advanced_check) {
+    //for(int i = 0; i < 4; i++) {
+    //    ReadRegister(ctrl, ch, ATA_REG_ALTSTATUS);
+    //}
+    u8 state;
+
+    while((state = ReadStatus(ctrl, ch)) & ATA_SR_BSY) {
+        //logprintf("Drive is busy: %x\n", status);
+    }
+    //logprintf("Drive state 1: %x\n", state);
 
     if(advanced_check) {
-        u8 state = ReadRegister(ctrl, ch, ATA_REG_STATUS);
+        u8 state = ReadStatus(ctrl, ch);
+        //logprintf("Drive state 2: %x\n", state);
 
         if(state & ATA_SR_ERR) {
             return 2;
@@ -199,6 +213,7 @@ static u8 Poll(IDE_Controller* ctrl, u8 ch, u32 advanced_check) {
         }
 
         if((state & ATA_SR_DRQ) == 0) {
+            logprintf("DATA REQUEST IS NOT READY: state=%x\n", state);
             return 3;
         }
     }
@@ -239,33 +254,209 @@ static u8 PrintError(IDE_Controller* ctrl, u32 drive, u8 err) {
                 break;
             }
         }
-    } else {
-        return 0;
     }
+
+    return 0;
 }
 
-static bool IDE_Disk_Read(void* user, u32* bytes_read, void* buf, u32 siz, u32 off) {
-    auto drive = (Drive*)user;
-    auto ctrl = drive->ctrl;
-    return false;
+static u8 ATAAccess(IDE_Controller* ctrl, u8 direction, u8 drive, u32 lba, u8 numsects, u32 edi) {
+    unsigned char lba_mode /* 0: CHS, 1:LBA28, 2: LBA48 */, dma /* 0: No DMA, 1: DMA */, cmd;
+    unsigned char lba_io[6];
+    unsigned int  channel      = ctrl->drives[drive].channel; // Read the Channel.
+    unsigned int  slavebit      = ctrl->drives[drive].drive; // Read the Drive [Master/Slave]
+    unsigned int  bus = ctrl->channels[channel].base; // Bus Base, like 0x1F0 which is also data port.
+    unsigned int  words      = 256; // Almost every ATA drive has a sector-size of 512-byte.
+    unsigned short cyl, i;
+    unsigned char head, sect, err;
+    //u8 rerr;
+
+    // Disable IRQs
+    WriteRegister(ctrl, channel, ATA_REG_CONTROL, ctrl->channels[channel].nIEN = (ctrl->irq = 0) + 0x02);
+    //rerr = ReadRegister(ctrl, channel, ATA_REG_ERROR); logprintf("err: %x\n", rerr);
+
+    if(ctrl->drives[drive].caps & 0x200) {
+        lba_io[0] = (lba & 0x000000FF) >> 0;
+        lba_io[1] = (lba & 0x0000FF00) >> 8;
+        lba_io[2] = (lba & 0x00FF0000) >> 16;
+        lba_io[4] = 0;
+        lba_io[5] = 0;
+        if(lba >= 0x10000000) {
+            // LBA-48
+            lba_mode = 2;
+            lba_io[3] = (lba & 0xFF000000) >> 24;
+            head = 0;
+        } else {
+            lba_mode = 1;
+            lba_io[3] = 0;
+            head = (lba & 0xF000000) >> 24;
+        }
+    } else {
+        ASSERT(!"Drive doesn't support LBA!!!");
+        lba_mode = 0;
+        sect = (lba % 63) + 1;
+        cyl = (lba + 1  - sect) / (16 * 63);
+        lba_io[0] = sect;
+        lba_io[1] = (cyl >> 0) & 0xFF;
+        lba_io[2] = (cyl >> 8) & 0xFF;
+        lba_io[3] = 0;
+        lba_io[4] = 0;
+        lba_io[5] = 0;
+        head = (lba + 1  - sect) % (16 * 63) / (63);
+    }
+
+    dma = 0;
+
+    while(ReadRegister(ctrl, channel, ATA_REG_STATUS) & ATA_SR_BSY);
+
+    if(lba_mode != 0) {
+        WriteRegister(ctrl, channel, ATA_REG_HDDEVSEL, 0xE0 | (slavebit << 4) | head); // LBA
+    } else {
+        ASSERT(0);
+        WriteRegister(ctrl, channel, ATA_REG_HDDEVSEL, 0xA0 | (slavebit << 4) | head); // CHS
+    }
+
+    //logprintf("DISK READ CH[%d] LBA[%x %x %x %x %x %x] LEN[%x] MODE[%d]\n", channel, lba_io[0], lba_io[1], lba_io[2], lba_io[3], lba_io[4], lba_io[5], numsects, lba_mode);
+
+    if(lba_mode == 2) {
+        WriteRegister(ctrl, channel, ATA_REG_SECCOUNT1, 0);
+        WriteRegister(ctrl, channel, ATA_REG_LBA3, lba_io[3]);
+        WriteRegister(ctrl, channel, ATA_REG_LBA4, lba_io[4]);
+        WriteRegister(ctrl, channel, ATA_REG_LBA5, lba_io[5]);
+    }
+    WriteRegister(ctrl, channel, ATA_REG_SECCOUNT0, numsects);
+    WriteRegister(ctrl, channel, ATA_REG_LBA0, lba_io[0]);
+    WriteRegister(ctrl, channel, ATA_REG_LBA1, lba_io[1]);
+    WriteRegister(ctrl, channel, ATA_REG_LBA2, lba_io[2]);
+    
+    //rerr = ReadRegister(ctrl, channel, ATA_REG_ERROR); logprintf("err: %x\n", rerr);
+
+    cmd = 0;
+    if (lba_mode == 0 && dma == 0 && direction == 0) cmd = ATA_CMD_READ_PIO;
+    if (lba_mode == 1 && dma == 0 && direction == 0) cmd = ATA_CMD_READ_PIO;    
+    if (lba_mode == 2 && dma == 0 && direction == 0) cmd = ATA_CMD_READ_PIO_EXT;    
+    if (lba_mode == 0 && dma == 1 && direction == 0) cmd = ATA_CMD_READ_DMA;
+    if (lba_mode == 1 && dma == 1 && direction == 0) cmd = ATA_CMD_READ_DMA;
+    if (lba_mode == 2 && dma == 1 && direction == 0) cmd = ATA_CMD_READ_DMA_EXT;
+    if (lba_mode == 0 && dma == 0 && direction == 1) cmd = ATA_CMD_WRITE_PIO;
+    if (lba_mode == 1 && dma == 0 && direction == 1) cmd = ATA_CMD_WRITE_PIO;
+    if (lba_mode == 2 && dma == 0 && direction == 1) cmd = ATA_CMD_WRITE_PIO_EXT;
+    if (lba_mode == 0 && dma == 1 && direction == 1) cmd = ATA_CMD_WRITE_DMA;
+    if (lba_mode == 1 && dma == 1 && direction == 1) cmd = ATA_CMD_WRITE_DMA;
+    if (lba_mode == 2 && dma == 1 && direction == 1) cmd = ATA_CMD_WRITE_DMA_EXT;
+    ASSERT(cmd != 0);
+
+    WriteRegister(ctrl, channel, ATA_REG_COMMAND, cmd);
+    //auto status = ReadStatus(ctrl, channel); logprintf("Status: %x\n", status);
+    //status = ReadStatus(ctrl, channel); logprintf("Status: %x\n", status);
+
+    if(!dma) {
+        if(direction == 0) {
+            for(u32 i = 0; i < numsects; i++) {
+                if((err = Poll(ctrl, channel, 1))) {
+                    return err;
+                }
+
+                // TODO:
+                asm("rep insw" : : "c"(words), "d"(bus), "D"(edi));
+                edi += words * 2;
+            }
+        } else {
+            for(i = 0; i < numsects; i++) {
+                Poll(ctrl, channel, 0);
+
+                // TODO:
+                asm("rep outsw" : : "c"(words), "d"(bus), "S"(edi));
+                edi += words * 2;
+            }
+
+            WriteRegister(ctrl, channel, ATA_REG_COMMAND,
+            (u8[]) { ATA_CMD_CACHE_FLUSH, ATA_CMD_CACHE_FLUSH, ATA_CMD_CACHE_FLUSH_EXT}[lba_mode]);
+            Poll(ctrl, channel, 0);
+        }
+    } else {
+        ASSERT(0);
+    }
+
+    return 0;
 }
 
-static bool IDE_Disk_Write(void* user, u32* bytes_written, const void* buf, u32 siz, u32 off) {
+static bool IDE_Disk_Read(void* user, u32* blocks_read, void* buf, u32 block_count, u32 block_offset) {
     auto drive = (Drive*)user;
     auto ctrl = drive->ctrl;
-    return false;
+    bool ret = false;
+
+    if(drive->present) {
+        if(buf && block_count > 0) {
+            if(block_offset < drive->size) {
+                if(drive->type == IDE_ATA) {
+                    auto err = ATAAccess(ctrl, ATA_READ, drive->drive, block_offset, block_count, (u32)buf);
+                    if(err == 0) {
+                        ret = true;
+                        *blocks_read = block_count;
+                    } else {
+                        PrintError(ctrl, drive->drive, err);
+                        *blocks_read = 0;
+                    }
+                } else {
+                    logprintf("IDE: reading ATAPI is unsupported!\n");
+                }
+            } else {
+                logprintf("IDE: read offset is out of bounds!\n");
+            }
+        } else {
+            logprintf("IDE: code requested null read!\n");
+        }
+    } else {
+        logprintf("IDE: code tried to read from a drive not present!\n");
+    }
+
+    return ret;
+}
+
+static bool IDE_Disk_Write(void* user, u32* blocks_written, const void* buf, u32 block_count, u32 block_offset) {
+    auto drive = (Drive*)user;
+    auto ctrl = drive->ctrl;
+
+    bool ret = false;
+
+    if(drive->present) {
+        if(buf && block_count > 0) {
+            if(block_offset < drive->size) {
+                if(drive->type == IDE_ATA) {
+                    auto err = ATAAccess(ctrl, ATA_WRITE, drive->drive, block_offset, block_count, (u32)buf);
+                    if(err == 0) {
+                        ret = true;
+                        *blocks_written = block_count;
+                    } else {
+                        PrintError(ctrl, drive->drive, err);
+                        *blocks_written = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    return ret;
 }
 
 static bool IDE_Disk_Flush(void* user) {
     auto drive = (Drive*)user;
-    auto ctrl = drive->ctrl;
-    return true;
+
+    if(drive && drive->present) {
+        auto ctrl = drive->ctrl;
+        u32 channel = drive->channel;
+        WriteRegister(ctrl, channel, ATA_REG_COMMAND, ATA_CMD_CACHE_FLUSH);
+        return true;
+    }
+
+    return false;
 }
 
 static Disk_Device_Descriptor gDiskDesc = {
     .Read = IDE_Disk_Read,
     .Write = IDE_Disk_Write,
     .Flush = IDE_Disk_Flush,
+    .BlockSize = 512,
 };
 
 static bool IDE_Initialize_Controller(const PCI_Device* dev, IDE_Controller* ctrl) {
@@ -329,7 +520,7 @@ static bool IDE_Initialize_Controller(const PCI_Device* dev, IDE_Controller* ctr
                 u8 cl = ReadRegister(ctrl, channel, ATA_REG_LBA1);
                 u8 ch = ReadRegister(ctrl, channel, ATA_REG_LBA2);
 
-                if(cl == 0x14 & ch == 0xEB) {
+                if(cl == 0x14 && ch == 0xEB) {
                     type = IDE_ATAPI;
                 } else if(cl == 0x69 && ch == 0x96) {
                     type = IDE_ATAPI;
