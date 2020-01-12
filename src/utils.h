@@ -8,4 +8,6 @@ void do_assert(const char* expr, s32 line, const char* file, const char* functio
 #define _ASSERT(expr) #expr
 #define ASSERT(expr) if(!(expr)) {do_assert((const char*)_ASSERT(expr),(s32) __LINE__, (const char*)__FILE__, (const char*)__FUNCTION__);}
 
+void memset(void* dst, int value, u32 len);
+
 #endif /* KERNEL_UTILS_H */

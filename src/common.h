@@ -22,4 +22,6 @@ using va_list = __builtin_va_list;
 #define va_arg(v,l) __builtin_va_arg(v,l)
 */
 
+#define PACKED __attribute__((packed))
+
 #endif

@@ -7,3 +7,21 @@ void do_assert(const char* expr, s32 line, const char* file, const char* functio
     
     while(1);
 }
+
+void memset(void* dst, int value, u32 len) {
+	if (!(dst && len)) {
+		return;
+	}
+	int* tgti = (int*)dst;
+	while (len > 4) {
+		*tgti = value;
+		len -= 4;
+		tgti++;
+	}
+	char* tgtc = (char*)dst;
+	while (len) {
+		*tgtc = (char)(value & 0xFF);
+		len--;
+		tgtc++;
+	}
+}
