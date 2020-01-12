@@ -6,6 +6,7 @@
 #include "utils.h"
 #include "memory.h"
 #include "interrupts.h"
+#include "timer.h"
 
 extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     Log_Init();
@@ -13,6 +14,7 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     UART_Setup(PORT_COM1);
 
     Interrupts_Setup();
+    Timer_Setup();
 
     logprintf("Hello World! %x\n", magic);
 
@@ -22,9 +24,7 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
         ASSERT(!"Didn't boot from a Multiboot2 bootloader");
     }
 
-    *((u8*)NULL);
-
-    logprintf("NULL deref survived!\n");
-
-    while(1) {}
+    while(1) {
+        logprintf("Time: %x\n", TicksElapsed());
+    }
 }
