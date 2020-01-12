@@ -19,13 +19,15 @@ using PCI_Driver_Probe = int (*)(const PCI_Device* device);
 #define PCI_PROBE_OK  (0)
 #define PCI_PROBE_ERR (1)
 
-using PCI_Driver_Poll = void (*)(void* user);
+using PCI_Driver_Poll = void (*)(const PCI_Device* device);
 
 struct PCI_Driver {
     const char* Name;
     PCI_Driver_Probe Probe;
     PCI_Driver_Poll Poll;
 };
+
+using PCI_Driver_Init = PCI_Driver* (*)();
 
 void PCI_Enumerate();
 u32 PCI_ReadCfgReg(PCI_Address devaddr, u8 offset);
@@ -37,11 +39,20 @@ inline void PCI_Cfg_ReadID(PCI_Address addr, u16* vendor, u16* device) {
     *device = (reg >> 16);
 }
 
-#include "logging.h"
+inline void PCI_Cfg_ReadClass(PCI_Address addr, u8* dev_class, u8* dev_subclass) {
+    u32 reg = PCI_ReadCfgReg(addr, 0x08);
+    *dev_class = (reg >> 24) & 0xFF;
+    *dev_subclass = (reg >> 16) & 0xFF;
+}
+
+void PCI_Register_Module(PCI_Driver_Init init);
+
 struct PCI_Driver_Register_Proxy {
-    PCI_Driver_Register_Proxy(void(*module_init)()) {
-        logprintf("Module init: %x\n", module_init);
+    PCI_Driver_Register_Proxy(PCI_Driver_Init init) {
+        PCI_Register_Module(init);
     }
 };
+
+#define REGISTER_PCI_DRIVER(init) static PCI_Driver_Register_Proxy __devproxy(init)
 
 #endif /* KERNEL_PCI_H */
