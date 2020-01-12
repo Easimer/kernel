@@ -5,7 +5,7 @@ CXXFLAGS=-std=c++17 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
 VERSION=0.1
 KERNEL_FILENAME=kernel-$(VERSION).img
 
-KERNEL_OBJECTS=boot.S.o main.cpp.o pc_vga.cpp.o logging.cpp.o port_io.S.o uart.cpp.o
+KERNEL_OBJECTS=boot.S.o main.cpp.o pc_vga.cpp.o logging.cpp.o port_io.S.o uart.cpp.o multiboot2.cpp.o
 
 all: $(KERNEL_FILENAME) boot.iso
 

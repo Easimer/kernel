@@ -15,4 +15,11 @@ using s16 = signed short;
 using s32 = signed long;
 using s64 = signed long long;
 
+/*
+using va_list = __builtin_va_list;
+#define va_start(v,l)   __builtin_va_start(v,l)
+#define va_end(v)   __builtin_va_end(v)
+#define va_arg(v,l) __builtin_va_arg(v,l)
+*/
+
 #endif

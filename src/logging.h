@@ -13,5 +13,9 @@ void Log_Init();
 void Log_Register(void* user, const Log_Destination* dest);
 void Log_LogString(const char* str);
 void Log_LogChar(char ch);
+void Log_LogInt(s32 x);
+void Log_LogHex(u32 x);
+
+void logprintf(const char* format, ...);
 
 #endif /* KERNEL_LOGGING_H */
