@@ -45,6 +45,16 @@ inline void PCI_Cfg_ReadClass(PCI_Address addr, u8* dev_class, u8* dev_subclass)
     *dev_subclass = (reg >> 16) & 0xFF;
 }
 
+inline u32 PCI_Cfg_ReadBAR(PCI_Address addr, u32 id) {
+    u32 ret = 0xFFFFFFFF;
+
+    if(id >= 0 && id < 6) {
+        ret = PCI_ReadCfgReg(addr, 0x10 + id);
+    }
+
+    return ret;
+}
+
 void PCI_Register_Module(PCI_Driver_Init init);
 
 struct PCI_Driver_Register_Proxy {

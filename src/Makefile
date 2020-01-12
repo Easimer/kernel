@@ -9,8 +9,9 @@ CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)
 VERSION=0.1
 KERNEL_FILENAME=kernel-$(VERSION).img
 KERNEL_CORE_OBJECTS=boot.S.o main.cpp.o logging.cpp.o port_io.S.o multiboot2.cpp.o utils.cpp.o memory.cpp.o simd.S.o
-KERNEL_DRIVER_OBJECTS=interrupts.cpp.o interrupts.S.o pc_vga.cpp.o uart.cpp.o timer.cpp.o pci.cpp.o ide.cpp.o
-KERNEL_OBJECTS=$(KERNEL_CORE_OBJECTS) $(KERNEL_DRIVER_OBJECTS)
+KERNEL_DRIVER_CORE_OBJECTS=pci.cpp.o interrupts.cpp.o interrupts.S.o disk.cpp.o
+KERNEL_DRIVER_OBJECTS=pc_vga.cpp.o uart.cpp.o timer.cpp.o ide.cpp.o
+KERNEL_OBJECTS=$(KERNEL_CORE_OBJECTS) $(KERNEL_DRIVER_CORE_OBJECTS) $(KERNEL_DRIVER_OBJECTS)
 
 all: $(KERNEL_FILENAME) boot.iso
 

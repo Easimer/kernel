@@ -13,7 +13,7 @@ static void MB2_Parse_MemMap(const MB2_Tag_Memory_Map* mm) {
 
     auto entry = (const MB2_Tag_Memory_Map_Entry*)(mm + 1);
 
-    logprintf("Parsing memory map of size %x\n", mm->hdr.size);
+    //logprintf("Parsing memory map of size %x\n", mm->hdr.size);
 
     void* base_max = NULL;
     u32 len_max = 0;
@@ -41,7 +41,7 @@ void MB2_Parse(const MB2_Header* hdr) {
     logprintf("Parsing Multiboot2 info\n");
 
     while(tag_hdr->type != 0) {
-        logprintf("Tag type=%d size=%x\n", tag_hdr->type, tag_hdr->size);
+        //logprintf("Tag type=%d size=%x\n", tag_hdr->type, tag_hdr->size);
         switch(tag_hdr->type) {
             case MB2_TAG_MEMMAP:
                 MB2_Parse_MemMap((const MB2_Tag_Memory_Map*)tag_hdr);
@@ -50,5 +50,5 @@ void MB2_Parse(const MB2_Header* hdr) {
         JUMP_NEXT_TAG(tag_hdr);
     }
 
-    logprintf("Parsing Multiboot2 info ended\n");
+    //logprintf("Parsing Multiboot2 info ended\n");
 }

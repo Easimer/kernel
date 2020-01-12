@@ -96,9 +96,3 @@ void PCI_Register_Module(PCI_Driver_Init init) {
         logprintf("Initialized driver '%s'!\n", driver->Name);
     }
 }
-
-PCI_Driver* test_init() {
-    return NULL;
-}
-
-static PCI_Driver_Register_Proxy proxy(test_init);
