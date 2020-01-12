@@ -16,6 +16,7 @@ struct Disk_Device_Descriptor {
 };
 
 bool Disk_Register_Device(void* user, const Disk_Device_Descriptor* desc);
+void Disk_Partition_Probe();
 
 bool Disk_Exists(u32 disk);
 u32 Disk_BlockSize(u32 disk);
