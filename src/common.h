@@ -3,6 +3,8 @@
 
 #define NULL ((void*)0)
 
+#define CLINK extern "C" __attribute__((__cdecl__))
+
 using u8 = unsigned char;
 using u16 = unsigned short;
 using u32 = unsigned long;
