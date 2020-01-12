@@ -9,6 +9,7 @@
 #include "timer.h"
 
 extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
+    SSE_Setup();
     Log_Init();
     PCVGA_Init();
     UART_Setup(PORT_COM1);
@@ -25,6 +26,5 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     }
 
     while(1) {
-        logprintf("Time: %x\n", TicksElapsed());
     }
 }

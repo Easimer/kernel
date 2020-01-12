@@ -1,6 +1,7 @@
 #include "common.h"
 #include "pc_vga.h"
 #include "logging.h"
+#include "simd.h"
 
 #define VGA_WIDTH (80)
 #define VGA_HEIGHT (25)
@@ -35,12 +36,35 @@ static PCVGA_State vga;
 static void PCVGA_ScrollBack() {
     // Copy nth line into the n-1th line
     for(u32 y = 1; y < VGA_HEIGHT; y++) {
+        __m128i chk0, chk1, chk2, chk3, chk4;
+        __m128i chk5, chk6, chk7, chk8, chk9;
         u32 base_prev = (y - 1) * VGA_WIDTH;
         u32 base_cur = y * VGA_WIDTH;
 
-        for(u32 x = 0; x < VGA_WIDTH; x++) {
-            vga.buffer[base_prev + x] = vga.buffer[base_cur + x];
-        }
+        u8* ptr_cur = (u8*)(vga.buffer + base_cur);
+        u8* ptr_prv = (u8*)(vga.buffer + base_prev);
+
+        chk0 = _mm_load_si128((__m128i*)(ptr_cur +   0));
+        chk1 = _mm_load_si128((__m128i*)(ptr_cur +  16));
+        chk2 = _mm_load_si128((__m128i*)(ptr_cur +  32));
+        chk3 = _mm_load_si128((__m128i*)(ptr_cur +  48));
+        chk4 = _mm_load_si128((__m128i*)(ptr_cur +  64));
+        chk5 = _mm_load_si128((__m128i*)(ptr_cur +  80));
+        chk6 = _mm_load_si128((__m128i*)(ptr_cur +  96));
+        chk7 = _mm_load_si128((__m128i*)(ptr_cur + 112));
+        chk8 = _mm_load_si128((__m128i*)(ptr_cur + 128));
+        chk9 = _mm_load_si128((__m128i*)(ptr_cur + 144));
+
+        _mm_store_si128((__m128i*)(ptr_prv +   0), chk0);
+        _mm_store_si128((__m128i*)(ptr_prv +  16), chk1);
+        _mm_store_si128((__m128i*)(ptr_prv +  32), chk2);
+        _mm_store_si128((__m128i*)(ptr_prv +  48), chk3);
+        _mm_store_si128((__m128i*)(ptr_prv +  64), chk4);
+        _mm_store_si128((__m128i*)(ptr_prv +  80), chk5);
+        _mm_store_si128((__m128i*)(ptr_prv +  96), chk6);
+        _mm_store_si128((__m128i*)(ptr_prv + 112), chk7);
+        _mm_store_si128((__m128i*)(ptr_prv + 128), chk8);
+        _mm_store_si128((__m128i*)(ptr_prv + 144), chk9);
     }
 
     // Clear last line

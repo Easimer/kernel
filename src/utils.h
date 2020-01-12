@@ -10,4 +10,6 @@ void do_assert(const char* expr, s32 line, const char* file, const char* functio
 
 void memset(void* dst, int value, u32 len);
 
+extern "C" void SSE_Setup();
+
 #endif /* KERNEL_UTILS_H */
