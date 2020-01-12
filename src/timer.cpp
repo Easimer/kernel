@@ -3,18 +3,19 @@
 #include "port_io.h"
 #include "interrupts.h"
 
-static u32 ticks;
+static volatile u32 ticks;
 
 static void TimerHandler(const Registers* regs) {
     ticks++;
 }
 
+const u16 Divisor = 1193; // ~1kHz
+
 void Timer_Setup() {
     ticks = 0;
 
-    u16 divisor = 11931;
-    u8 l = divisor & 0xFF;
-    u8 h = (divisor >> 8) & 0xFF;
+    u8 l = Divisor & 0xFF;
+    u8 h = (Divisor >> 8) & 0xFF;
 
     Interrupts_Register_Handler(IRQ0, TimerHandler);
 
@@ -23,10 +24,24 @@ void Timer_Setup() {
     outb(0x40, h);
 }
 
+#include "logging.h"
+
 void Sleep(u32 millis) {
-    // TODO:
+    auto end = ticks + millis;
+
+    while(ticks < end) {
+        asm volatile("hlt");
+    }
 }
 
 u32 TicksElapsed() {
     return ticks;
+}
+
+void SleepTicks(u32 n) {
+    auto end = ticks + n;
+
+    while(ticks < end) {
+        asm volatile("hlt");
+    }
 }

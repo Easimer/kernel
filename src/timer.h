@@ -5,6 +5,7 @@
 
 void Timer_Setup();
 void Sleep(u32 millis);
+void SleepTicks(u32 ticks);
 u32 TicksElapsed();
 
 #endif /* KERNEL_TIMER_H */

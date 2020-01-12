@@ -38,6 +38,9 @@ global _start
 _start:
     mov esp, stack_top
 
+    push ds
+    pop es
+
     push ebx
     push eax
     extern kmain

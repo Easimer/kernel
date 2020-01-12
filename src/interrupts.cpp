@@ -195,6 +195,10 @@ static void GeneralProtectionFault(const Registers* regs) {
     logprintf("ESI: %x EDI: %x EBP: %x ESP: %x\n", regs->esi, regs->edi, regs->ebp, regs->esp);
     logprintf("EIP: %x CS: %x EFLAGS: %x SS: %x\n", regs->eip, regs->cs, regs->eflags, regs->ss);
     logprintf("======================\n");
+
+    while(1) {
+        asm volatile("hlt");
+    }
 }
 
 void Interrupts_Setup() {

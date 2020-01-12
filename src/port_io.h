@@ -11,4 +11,6 @@ CLINK u8 inb(u32 addr);
 CLINK u16 inw(u32 addr);
 CLINK u32 ind(u32 addr);
 
+CLINK void insd(u16 addr, u32* buffer, u32 count);
+
 #endif /* KERNEL_PORTIO_H */

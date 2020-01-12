@@ -53,3 +53,25 @@ ind:
     in eax, dx
     ret
 
+; void insd(u16 addr, u32* buffer, u32 count)
+global insd
+insd:
+    push ebp
+    mov ebp, esp
+    push edi
+
+    ; Stack:
+    ; +0 edi
+    ; +4 ebp
+    ; +8 ret addr
+    ; +12 addr
+    ; +16 buffer
+    ; +20 count
+    mov edx, DWORD [esp + 12]
+    mov edi, DWORD [esp + 16]
+    mov ecx, DWORD [esp + 20]
+    rep insd
+
+    pop edi
+    pop ebp
+    ret
