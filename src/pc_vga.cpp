@@ -34,7 +34,7 @@ static PCVGA_State vga;
 
 static void PCVGA_ScrollBack() {
     // Copy nth line into the n-1th line
-    for(u32 y = 1; y < VGA_HEIGHT - 1; y++) {
+    for(u32 y = 1; y < VGA_HEIGHT; y++) {
         u32 base_prev = (y - 1) * VGA_WIDTH;
         u32 base_cur = y * VGA_WIDTH;
 
