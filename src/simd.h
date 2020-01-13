@@ -2,6 +2,7 @@
 #define KERNEL_SIMD_H
 
 typedef long long __m128i __attribute__ ((__vector_size__ (16), __may_alias__));
+typedef long long __m128i_u __attribute__ ((__vector_size__ (16), __may_alias__, __aligned__ (1)));
 
 extern __inline void __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm_store_si128 (__m128i *__P, __m128i __B)
@@ -12,6 +13,18 @@ _mm_store_si128 (__m128i *__P, __m128i __B)
 
 extern __inline __m128i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 _mm_load_si128 (__m128i const *__P)
+{
+  return *__P;
+}
+
+extern __inline void __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm_storeu_si128 (__m128i_u *__P, __m128i __B)
+{
+  *__P = __B;
+}
+
+extern __inline __m128i __attribute__((__gnu_inline__, __always_inline__, __artificial__))
+_mm_loadu_si128 (__m128i_u const *__P)
 {
   return *__P;
 }

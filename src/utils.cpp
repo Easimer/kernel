@@ -1,6 +1,7 @@
 #include "common.h"
 #include "utils.h"
 #include "logging.h"
+#include "simd.h"
 
 void do_assert(const char* expr, s32 line, const char* file, const char* function) {
     logprintf("========================\nAssertion failed: %s\nFile: %s\nFunction: %s:%d\n", expr, file, function, line);
@@ -23,5 +24,53 @@ void memset(void* dst, int value, u32 len) {
 		*tgtc = (char)(value & 0xFF);
 		len--;
 		tgtc++;
+	}
+}
+
+static void memcpyu(void* dst, const void* src, u32 len) {
+	u64* d64 = (u64*)dst;
+	const u64* s64 = (const u64*)src;
+	while (len >= 16) {
+        _mm_storeu_si128((__m128i*)d64, _mm_loadu_si128((__m128i const*)s64));
+        d64++; s64++;
+        d64++; s64++;
+        len -= 16;
+	}
+	u8* d8 = (u8*)d64;
+	const u8* s8 = (const u8*)s64;
+	while (len) {
+		*d8 = *s8;
+		d8++; s8++;
+		len--;
+	}
+}
+
+void memcpy(void* dst, const void* src, u32 len) {
+	if (!(dst && src && len)) {
+		return;
+	}
+	// if the addresses are unaligned, use unaligned memcpy
+	if (!(
+		(((u32)dst & 0xF) == 0) &&
+		(((u32)src & 0xF) == 0)
+		)) {
+		memcpyu(dst, src, len);
+		return;
+	}
+    
+	u64* d64 = (u64*)dst;
+	const u64* s64 = (const u64*)src;
+	while (len >= 16) {
+        _mm_store_si128((__m128i*)d64, _mm_load_si128((__m128i const*)s64));
+        d64++; s64++;
+        d64++; s64++;
+        len -= 16;
+	}
+	u8* d8 = (u8*)d64;
+	const u8* s8 = (const u8*)s64;
+	while(len) {
+		*d8 = *s8;
+		d8++; s8++;
+		len--;
 	}
 }

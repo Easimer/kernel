@@ -75,7 +75,7 @@ static void PCVGA_ScrollBack() {
 }
 
 static void PCVGA_PutChar(char c) {
-    if(c != '\n') {
+    if(c != '\n' && c != '\t') {
         vga.buffer[vga.row * VGA_WIDTH + vga.column] = MAKE_CHAR(COL_BLACK, COL_LIGHT_GREY, c);
         vga.column++;
         if(vga.column == VGA_WIDTH) {
@@ -84,9 +84,18 @@ static void PCVGA_PutChar(char c) {
             // See: Check row
         }
     } else {
-        vga.column = 0;
-        vga.row += 1;
-        // See: Check row
+        if(c == '\n') {
+            vga.column = 0;
+            vga.row += 1;
+            // See: Check row
+        } else if(c == '\t') {
+            vga.column += 4;
+            if(vga.column > VGA_WIDTH) {
+                vga.column = 0;
+                vga.row++;
+                // See: Check row
+            }
+        }
     }
 
     // Check row

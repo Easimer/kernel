@@ -10,7 +10,7 @@ VERSION=0.1
 KERNEL_FILENAME=kernel-$(VERSION).img
 KERNEL_CORE_OBJECTS=boot.S.o main.cpp.o logging.cpp.o port_io.S.o multiboot2.cpp.o utils.cpp.o memory.cpp.o simd.S.o
 KERNEL_DRIVER_CORE_OBJECTS=pci.cpp.o interrupts.cpp.o interrupts.S.o disk.cpp.o volumes.cpp.o
-KERNEL_DRIVER_OBJECTS=pc_vga.cpp.o uart.cpp.o timer.cpp.o ide.cpp.o
+KERNEL_DRIVER_OBJECTS=pc_vga.cpp.o uart.cpp.o timer.cpp.o ide.cpp.o fat32.cpp.o
 KERNEL_OBJECTS=$(KERNEL_CORE_OBJECTS) $(KERNEL_DRIVER_CORE_OBJECTS) $(KERNEL_DRIVER_OBJECTS)
 
 all: $(KERNEL_FILENAME) boot.iso
@@ -35,7 +35,10 @@ grub/isoroot/boot/grub/grub.cfg: grub/create-grubcfg.sh
 	mkdir -p grub/isoroot/boot/grub/
 	grub/create-grubcfg.sh grub/isoroot/boot/grub/grub.cfg $(VERSION)
 
-.PHONY: clean
+.PHONY: clean run
 
 clean:
 	rm -rf $(KERNEL_FILENAME) $(KERNEL_OBJECTS) boot.iso grub/isoroot/
+
+run: boot.iso
+	qemu-system-i386 -cdrom boot.iso -m 64M -boot d -serial stdio $(QFLAGS)
