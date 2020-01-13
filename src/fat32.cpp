@@ -121,14 +121,14 @@ static u8* LoadCluster(FAT32_State* fs, u32 cluster_idx) {
         if(fs->cluster_cache_dirty) {
             // Write cached sector back
             sector_offset = fs->sector_offset_data_region + (fs->cluster_cache_index - 2) * fs->sectors_per_cluster;
-            logprintf("FAT32: evicting cluster #%d (sector=%x) from cache\n", fs->cluster_cache_index, sector_offset);
+            //logprintf("FAT32: evicting cluster #%d (sector=%x) from cache\n", fs->cluster_cache_index, sector_offset);
             Volume_Write_Blocks(fs->vol, fs->cluster_cache, sector_offset, fs->sectors_per_cluster);
             fs->cluster_cache_dirty = false;
         }
         // Load new cluster
         sector_offset = fs->sector_offset_data_region + (cluster_idx - 2) * fs->sectors_per_cluster;
-        logprintf("Cluster Idx: %x Sectors per cluster: %d Data offset: %x -> Sector offset: %x\n", cluster_idx, fs->sectors_per_cluster, fs->sector_offset_data_region, sector_offset);
-        logprintf("FAT32: loading cluster #%d (sector=%x) into cache\n", cluster_idx, sector_offset);
+        //logprintf("Cluster Idx: %x Sectors per cluster: %d Data offset: %x -> Sector offset: %x\n", cluster_idx, fs->sectors_per_cluster, fs->sector_offset_data_region, sector_offset);
+        //logprintf("FAT32: loading cluster #%d (sector=%x) into cache\n", cluster_idx, sector_offset);
         Volume_Read_Blocks(fs->vol, fs->cluster_cache, sector_offset, fs->sectors_per_cluster);
     }
 
@@ -356,7 +356,7 @@ static s32 FS_Read(void* user, Filesystem_File_Handle fd, void* dst, s32 bytes) 
             auto& F = state->files[fd];
             auto cluster = LoadCluster(state, F.current_cluster);
 
-            auto local_offset = F.offset & state->cluster_size;
+            auto local_offset = F.offset & (state->cluster_size - 1);
             auto cluster_remains = state->cluster_size - local_offset;
             u8* ptr = (u8*)dst;
             ret = 0;
@@ -373,6 +373,7 @@ static s32 FS_Read(void* user, Filesystem_File_Handle fd, void* dst, s32 bytes) 
                 ret         += copy_count;
                 F.offset    += copy_count;
                 file_remains = F.size - F.offset;
+                cluster_remains -= copy_count;
 
                 // If we read past the end of the cluster, load next
                 if(cluster_remains == 0) {
@@ -391,18 +392,95 @@ static s32 FS_Read(void* user, Filesystem_File_Handle fd, void* dst, s32 bytes) 
 
 static s32 FS_Write(void* user, Filesystem_File_Handle fd, const void* src, s32 bytes) {
     auto state = (FAT32_State*)user;
+    ASSERT(state);
+    s32 ret = -1;
+    return ret;
 }
 
 static s32 FS_Tell(void* user, Filesystem_File_Handle fd) {
     auto state = (FAT32_State*)user;
+    ASSERT(state);
+    s32 ret = -1;
+
+    if(fd < FAT32_MAX_OPEN_FILES) {
+        if(state->files[fd].valid) {
+            auto& F = state->files[fd];
+            ret = (F.offset & 0x7FFFFFFF);
+        }
+    }
+
+    return ret;
 }
 
 static s32 FS_Seek(void* user, Filesystem_File_Handle fd, whence_t whence, s32 position) {
     auto state = (FAT32_State*)user;
+    ASSERT(state);
+    s32 ret = -1;
+
+    if(fd < FAT32_MAX_OPEN_FILES) {
+        if(state->files[fd].valid) {
+            auto& F = state->files[fd];
+            s32 new_offset;
+            s32 soffset = (s32)(F.offset & 0x7FFFFFFF);
+            s32 ssize = (s32)(F.size & 0x7FFFFFFF);
+            switch(whence) {
+                case whence_t::SET:
+                new_offset = position;
+                break;
+                case whence_t::CUR:
+                new_offset = soffset + position;
+                break;
+                case whence_t::END:
+                new_offset = ssize + position;
+                break;
+                default:
+                // Trigger an error
+                new_offset = F.size;
+                break;
+            }
+            if(new_offset < 0) {
+                new_offset = 0;
+            }
+            if(new_offset < ssize) {
+                F.current_cluster = F.cluster_start;
+                // Walk the list
+                u32 cluster_size = state->cluster_size;
+                F.offset = new_offset;
+                u32 remains = new_offset;
+                while(remains > cluster_size) {
+                    F.current_cluster = GetFATEntry(state, F.current_cluster);
+                    remains -= cluster_size;
+                }
+            } else {
+                // EOF
+            }
+        } else {
+            //logprintf("SEEK:: non-valid fd\n");
+        }
+    } else {
+        //logprintf("SEEK:: bad fd\n");
+    }
+
+    return ret;
 }
 
 static s32 FS_Sync(void* user) {
     auto state = (FAT32_State*)user;
+}
+
+static int FS_EOF(void* user, Filesystem_File_Handle fd) {
+    int ret = -1;
+    auto state = (FAT32_State*)user;
+    ASSERT(state);
+
+    if(fd >= 0 && fd < FAT32_MAX_OPEN_FILES) {
+        auto& F = state->files[fd];
+        if(F.valid) {
+            ret = F.offset == F.size ? 1 : 0;
+        }
+    }
+
+    return ret;
 }
 
 static bool FS_Probe(Volume_Handle handle, void** user) {
@@ -503,6 +581,7 @@ static Filesystem_Descriptor fsds = {
     .Tell = FS_Tell,
     .Seek = FS_Seek,
     .Sync = FS_Sync,
+    .EOF = FS_EOF,
 };
 
 static Filesystem_Descriptor* Register() {

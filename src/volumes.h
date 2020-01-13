@@ -39,6 +39,7 @@ using Filesystem_Write = s32 (*)(void* user, Filesystem_File_Handle fd, const vo
 using Filesystem_Tell = s32 (*)(void* user, Filesystem_File_Handle fd);
 using Filesystem_Seek = s32 (*)(void* user, Filesystem_File_Handle fd, whence_t whence, s32 position);
 using Filesystem_Sync = s32 (*)(void* user);
+using Filesystem_EOF = int (*)(void* user, Filesystem_File_Handle fd);
 
 using Filesystem_Probe = bool (*)(Volume_Handle handle, void** user);
 
@@ -52,6 +53,7 @@ struct Filesystem_Descriptor {
     Filesystem_Tell Tell;
     Filesystem_Seek Seek;
     Filesystem_Sync Sync;
+    Filesystem_EOF EOF;
 };
 
 using Filesystem_Register =  Filesystem_Descriptor* (*)();
@@ -65,6 +67,7 @@ int File_Read(void* ptr, u32 size, u32 nmemb, int fd);
 int File_Write(const void* ptr, u32 size, u32 nmemb, int fd);
 void File_Seek(int fd, s32 offset, whence_t whence);
 int File_Tell(int fd);
+int File_EOF(int fd);
 void Sync(Volume_Handle volume);
 
 struct Filesystem_Register_Proxy {

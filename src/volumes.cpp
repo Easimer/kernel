@@ -198,6 +198,36 @@ int File_Read(void* ptr, u32 size, u32 nmemb, int fd) {
 }
 
 int File_Write(const void* ptr, u32 size, u32 nmemb, int fd);
-void File_Seek(int fd, s32 offset, whence_t whence);
+
+void File_Seek(int fd, s32 offset, whence_t whence) {
+    if(fd >= 0 && fd < MAX_OPEN_FILES) {
+        if(gaFDMap[fd].used) {
+            auto& f = gaFDMap[fd];
+            ASSERT(f.vol < giVolumesLastIndex);
+            auto& V = gaVolumes[f.vol];
+            V.filesystem.desc->Seek(V.filesystem.user, f.fd, whence, offset);
+        } else {
+            //logprintf("FSEEK:: free fd\n");
+        }
+    } else {
+        //logprintf("FSEEK:: bad fd\n");
+    }
+}
+
 int File_Tell(int fd);
 void Sync(Volume_Handle volume);
+
+int File_EOF(int fd) {
+    int ret = -1;
+    
+    if(fd >= 0 && fd < MAX_OPEN_FILES) {
+        if(gaFDMap[fd].used) {
+            auto& f = gaFDMap[fd];
+            ASSERT(f.vol < giVolumesLastIndex);
+            auto& V = gaVolumes[f.vol];
+            ret = V.filesystem.desc->EOF(V.filesystem.user, f.fd);
+        }
+    }
+
+    return ret;
+}
