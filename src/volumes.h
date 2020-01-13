@@ -22,9 +22,10 @@ Filesystem* Volume_Get_Filesystem(Volume_Handle vol);
 
 using Filesystem_File_Handle = s32;
 enum mode_t {
-    O_RDONLY = 0,
-    O_WRONLY = 1,
-    O_RDWR = 2,
+    O_RDONLY = 1,
+    O_WRONLY = 2,
+    O_RDWR = 3,
+    O_CREAT = 4,
 };
 
 enum class whence_t {
@@ -36,7 +37,7 @@ using Filesystem_Close = void (*)(void* user, Filesystem_File_Handle fd);
 using Filesystem_Read = s32 (*)(void* user, Filesystem_File_Handle fd, void* dst, s32 bytes);
 using Filesystem_Write = s32 (*)(void* user, Filesystem_File_Handle fd, const void* src, s32 bytes);
 using Filesystem_Tell = s32 (*)(void* user, Filesystem_File_Handle fd);
-using Filesystem_Seek = s32 (*)(void* user, Filesystem_File_Handle fd, whence_t whence, u32 position);
+using Filesystem_Seek = s32 (*)(void* user, Filesystem_File_Handle fd, whence_t whence, s32 position);
 using Filesystem_Sync = s32 (*)(void* user);
 
 using Filesystem_Probe = bool (*)(Volume_Handle handle, void** user);
@@ -57,6 +58,14 @@ using Filesystem_Register =  Filesystem_Descriptor* (*)();
 
 void Filesystem_Register_Filesystem(Filesystem_Register init);
 void Volume_Detect_Filesystems();
+
+int File_Open(Volume_Handle volume, const char* path, mode_t flags);
+void File_Close(int fd);
+int File_Read(void* ptr, u32 size, u32 nmemb, int fd);
+int File_Write(const void* ptr, u32 size, u32 nmemb, int fd);
+void File_Seek(int fd, s32 offset, whence_t whence);
+int File_Tell(int fd);
+void Sync(Volume_Handle volume);
 
 struct Filesystem_Register_Proxy {
     Filesystem_Register_Proxy(Filesystem_Register init) {

@@ -110,3 +110,67 @@ void Filesystem_Register_Filesystem(Filesystem_Register init) {
         giFilesystemsLastIndex++;
     }
 }
+
+// -------------------------------------------------------------------
+
+#define MAX_OPEN_FILES (64)
+
+struct File_Handle_Mapping {
+    bool used = false;
+    Filesystem_File_Handle fd;
+    Volume_Handle vol;
+};
+
+static File_Handle_Mapping gaFDMap[MAX_OPEN_FILES];
+
+int File_Open(Volume_Handle volume, const char* path, mode_t flags) {
+    int ret = -1;
+
+    logprintf("File_Open\n");
+
+    if(volume < giVolumesLastIndex && path && flags > 0) {
+        int ch = -1;
+        // Find a free handle
+        for(int i = 0; i < MAX_OPEN_FILES && ch == -1; i++) {
+            if(!gaFDMap[i].used) {
+                ch = i;
+            }
+        }
+        if(ch != -1) {
+            auto& V = gaVolumes[volume];
+            auto& FS = V.filesystem;
+            auto handle = FS.desc->Open(FS.user, path, flags);
+            if(handle != -1) {
+                gaFDMap[ch].used = true;
+                gaFDMap[ch].fd = handle;
+                gaFDMap[ch].vol = volume;
+                ret = ch;
+            }
+        } else {
+            logprintf("File handles exhausted\n");
+        }
+    } else {
+        logprintf("Invalid volume (%d/%d), NULL path (%x) or no flags (%x)\n", volume, giVolumesLastIndex, path, flags);
+    }
+
+    return ret;
+}
+
+void File_Close(int fd) {
+    if(fd < MAX_OPEN_FILES) {
+        if(gaFDMap[fd].used) {
+            auto& f = gaFDMap[fd];
+            if(f.vol < giVolumesLastIndex) {
+                auto& V = gaVolumes[f.vol];
+                V.filesystem.desc->Close(V.filesystem.user, f.fd);
+            }
+            f.used = false;
+        }
+    }
+}
+
+int File_Read(void* ptr, u32 size, u32 nmemb, int fd);
+int File_Write(const void* ptr, u32 size, u32 nmemb, int fd);
+void File_Seek(int fd, s32 offset, whence_t whence);
+int File_Tell(int fd);
+void Sync(Volume_Handle volume);
