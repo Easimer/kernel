@@ -43,6 +43,9 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     // Detect filesystems
     Volume_Detect_Filesystems();
 
+    // Syscall test
+    asm("int $0x80");
+
     int fd = File_Open(0, "/LOREM.TXT", O_RDONLY);
     if(fd != -1) {
         u8 buffer[33];

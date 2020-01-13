@@ -67,6 +67,7 @@ extern "C" void isr29();
 extern "C" void isr30();
 extern "C" void isr31();
 extern "C" void isr127();
+extern "C" void isr128();
 extern "C" void irq0 ();
 extern "C" void irq1 ();
 extern "C" void irq2 ();
@@ -173,6 +174,7 @@ static void IDT_Setup() {
 	IDT_Set_Gate(46, (u32)irq14, 0x08, 0x8E);
 	IDT_Set_Gate(47, (u32)irq15, 0x08, 0x8E);
 	IDT_Set_Gate(127, (u32)isr127, 0x08, 0x8E);
+    IDT_Set_Gate(128, (u32)isr128, 0x08, 0x8E);
 
     IDT_Init(&idtd);
 }
@@ -201,11 +203,43 @@ static void GeneralProtectionFault(const Registers* regs) {
     }
 }
 
+struct Syscall_Handler {
+    u32 id;
+    void(*func)(const Registers* regs);
+};
+
+#define MAX_SYSCALLS (128)
+
+static Syscall_Handler gaSyscallHandlers[MAX_SYSCALLS];
+static u32 giSyscallHandlersLastIndex = 0;
+
+void RegisterSyscallHandler(u32 id, void(*func)(const Registers* regs)) {
+    if(giSyscallHandlersLastIndex < MAX_SYSCALLS) {
+        auto& SCH = gaSyscallHandlers[giSyscallHandlersLastIndex];
+        SCH.id = id;
+        SCH.func = func;
+        giSyscallHandlersLastIndex++;
+    }
+}
+
+static void SyscallHandler(const Registers* regs) {
+    auto id = regs->eax;
+    for(u32 i = 0; i < giSyscallHandlersLastIndex; i++) {
+        if(gaSyscallHandlers[i].id == id) {
+            gaSyscallHandlers[i].func(regs);
+            return;
+        }
+    }
+
+    logprintf("PROGRAM ERROR: invalid syscall or no handler: %x\n", id);
+}
+
 void Interrupts_Setup() {
     GDT_Setup();
     IDT_Setup();
 
     handlers[13] = GeneralProtectionFault;
+    handlers[0x80] = SyscallHandler;
 
     asm volatile("sti");
 }

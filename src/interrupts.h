@@ -29,5 +29,6 @@ using Interrupt_Handler = void(*)(const Registers* regs);
 
 void Interrupts_Setup();
 void Interrupts_Register_Handler(u32 i, Interrupt_Handler handler);
+void RegisterSyscallHandler(u32 id, void(*func)(const Registers* regs));
 
 #endif /* KERNEL_INTERRUPTS_H */
