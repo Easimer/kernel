@@ -49,6 +49,7 @@ struct FAT32_File {
     u32 cluster_start;
     u32 current_cluster;
     u32 offset;
+    u32 size;
 };
 
 struct FAT32_State {
@@ -167,7 +168,7 @@ static u32 GetFATEntry(FAT32_State* fs, u32 cluster_idx) {
     return ((u32*)fs->fat_cache)[off];
 }
 
-static u32 FindClusterOfEntryInDirectory(FAT32_State* fs, u32 cluster_dir, bool* is_subdirectory, bool* is_readonly, const char* path, u32 path_len) {
+static u32 FindClusterOfEntryInDirectory(FAT32_State* fs, u32 cluster_dir, Dirent* dent, const char* path, u32 path_len) {
     u32 ret = 0;
     ASSERT(fs);
     ASSERT(path);
@@ -238,11 +239,8 @@ static u32 FindClusterOfEntryInDirectory(FAT32_State* fs, u32 cluster_dir, bool*
                 if(found) {
                     ret = (((u32)ent.cluster_hi) << 16) | (u32)ent.cluster_lo;
 
-                    if(is_subdirectory != NULL) {
-                        *is_subdirectory = (ent.attr & DEA_Subdirectory) != 0;
-                    }
-                    if(is_readonly != NULL) {
-                        *is_readonly = (ent.attr & DEA_ReadOnly) != 0;
+                    if(dent != NULL) {
+                        memcpy(dent, &ent, sizeof(ent));
                     }
                 }
             }
@@ -270,6 +268,7 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
 
     bool found = false;
     u32 start_cluster = 0;
+    Dirent dent;
 
     if(state->free_file_handles > 0) {
         while(1) {
@@ -281,7 +280,10 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
             //logprintf("Fragment: '%s' L=%d\n", P, slash_idx);
             bool is_subdirectory = false, is_readonly = false;
 
-            u32 next_cluster = FindClusterOfEntryInDirectory(state, current_directory_cluster, &is_subdirectory, &is_readonly, P, slash_idx);
+            u32 next_cluster = FindClusterOfEntryInDirectory(state, current_directory_cluster, &dent, P, slash_idx);
+
+            is_subdirectory = (dent.attr & DEA_Subdirectory) != 0;
+            is_readonly = (dent.attr & DEA_ReadOnly) != 0;
 
             if(next_cluster != 0) {
                 bool end_of_path = P[slash_idx] == '\0';
@@ -312,6 +314,7 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
                     f.current_cluster = start_cluster;
                     f.offset = 0;
                     f.valid = true;
+                    f.size = dent.size;
                     ret = (Filesystem_File_Handle)fd;
                     break;
                 }
@@ -357,9 +360,11 @@ static s32 FS_Read(void* user, Filesystem_File_Handle fd, void* dst, s32 bytes) 
             auto cluster_remains = state->cluster_size - local_offset;
             u8* ptr = (u8*)dst;
             ret = 0;
+            u32 file_remains = F.size - F.offset;
 
-            while(bytes > 0) {
+            while(bytes > 0 && file_remains > 0) {
                 u32 copy_count = (cluster_remains < bytes) ? cluster_remains : bytes;
+                copy_count = copy_count > file_remains ? file_remains : copy_count;
                 memcpy(ptr, cluster + local_offset, copy_count);
 
                 bytes       -= copy_count;
@@ -367,6 +372,7 @@ static s32 FS_Read(void* user, Filesystem_File_Handle fd, void* dst, s32 bytes) 
                 
                 ret         += copy_count;
                 F.offset    += copy_count;
+                file_remains = F.size - F.offset;
 
                 // If we read past the end of the cluster, load next
                 if(cluster_remains == 0) {

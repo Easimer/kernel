@@ -46,11 +46,11 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     logprintf("Opening /TEST.TXT!\n");
     int fd = File_Open(0, "/TEST.TXT", O_RDONLY);
     if(fd != -1) {
-        u8 buffer[128];
+        u8 buffer[1024];
         auto rd = File_Read(buffer, 1, 127, fd);
         if(rd > 0) {
             buffer[rd] = 0;
-            logprintf("Positive read: '%s'\n", buffer);
+            logprintf("Positive read(%d bytes): '%s'\n", rd, buffer);
         }
         logprintf("Closing /TEST.TXT!\n");
         File_Close(fd);
