@@ -160,6 +160,7 @@ void File_Close(int fd) {
     if(fd < MAX_OPEN_FILES) {
         if(gaFDMap[fd].used) {
             auto& f = gaFDMap[fd];
+            ASSERT(f.vol < giVolumesLastIndex);
             if(f.vol < giVolumesLastIndex) {
                 auto& V = gaVolumes[f.vol];
                 V.filesystem.desc->Close(V.filesystem.user, f.fd);
@@ -169,7 +170,33 @@ void File_Close(int fd) {
     }
 }
 
-int File_Read(void* ptr, u32 size, u32 nmemb, int fd);
+int File_Read(void* ptr, u32 size, u32 nmemb, int fd) {
+    int ret = -1;
+
+    if(ptr && size > 0 && fd >= 0 && fd < MAX_OPEN_FILES) {
+        if(nmemb > 0) {
+            if(gaFDMap[fd].used) {
+                auto& f = gaFDMap[fd];
+                ASSERT(f.vol < giVolumesLastIndex);
+                auto& V = gaVolumes[f.vol];
+                s32 res = V.filesystem.desc->Read(V.filesystem.user, f.fd, ptr, size * nmemb);
+                if(res > 0) {
+                    ASSERT(res % size == 0);
+                    ret = res / size;
+                } else {
+                    logprintf("RD ERROR\n");
+                }
+            }
+        } else {
+            ret = 0;
+        }
+    } else {
+        // Bad argument(s)
+    }
+
+    return ret;
+}
+
 int File_Write(const void* ptr, u32 size, u32 nmemb, int fd);
 void File_Seek(int fd, s32 offset, whence_t whence);
 int File_Tell(int fd);

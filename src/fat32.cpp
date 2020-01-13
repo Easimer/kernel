@@ -59,6 +59,7 @@ struct FAT32_State {
     u32 sector_count; // sector count
     u32 cluster_root_dir; // cluster of root directory
     u32 sector_offset_data_region; // First sector of the data region
+    u32 cluster_size; // cluster size in bytes
 
     u32 cluster_cache_index; // (0xFFFFFFFF -> cache is invalid)
     bool cluster_cache_dirty;
@@ -344,6 +345,42 @@ static void FS_Close(void* user, Filesystem_File_Handle fd) {
 
 static s32 FS_Read(void* user, Filesystem_File_Handle fd, void* dst, s32 bytes) {
     auto state = (FAT32_State*)user;
+    ASSERT(state);
+    s32 ret = -1;
+
+    if(fd < FAT32_MAX_OPEN_FILES) {
+        if(state->files[fd].valid) {
+            auto& F = state->files[fd];
+            auto cluster = LoadCluster(state, F.current_cluster);
+
+            auto local_offset = F.offset & state->cluster_size;
+            auto cluster_remains = state->cluster_size - local_offset;
+            u8* ptr = (u8*)dst;
+            ret = 0;
+
+            while(bytes > 0) {
+                u32 copy_count = (cluster_remains < bytes) ? cluster_remains : bytes;
+                memcpy(ptr, cluster + local_offset, copy_count);
+
+                bytes       -= copy_count;
+                ptr         += copy_count;
+                
+                ret         += copy_count;
+                F.offset    += copy_count;
+
+                // If we read past the end of the cluster, load next
+                if(cluster_remains == 0) {
+                    F.current_cluster = GetFATEntry(state, F.current_cluster);
+                    local_offset = 0;
+                    cluster_remains = state->cluster_size;
+
+                    cluster = LoadCluster(state, F.current_cluster);
+                }
+            }
+        }
+    }
+
+    return ret;
 }
 
 static s32 FS_Write(void* user, Filesystem_File_Handle fd, const void* src, s32 bytes) {
@@ -412,6 +449,12 @@ static bool FS_Probe(Volume_Handle handle, void** user) {
                     state->sector_info = bootsect->sector_infosector;
                     state->sector_count = bootsect->total_sectors == 0 ? bootsect->total_sectors32 : bootsect->total_sectors;
                     state->cluster_root_dir = bootsect->cluster_root_directory;
+                    // NOTE: hard coded block size
+                    state->cluster_size = bootsect->sectors_per_cluster * 512;
+                    // NOTE: Make sure that cluster size is a power of two
+                    // NOTE: FAT spec ensures that sectors_per_cluster is a power of two so
+                    // this check is unnecessary
+                    ASSERT((state->cluster_size & (state->cluster_size - 1)) == 0);
 
                     auto sect_per_fat = (bootsect->sectors_per_fat == 0) ? bootsect->sectors_per_fat32 : bootsect->sectors_per_fat;
                     state->sector_offset_data_region = bootsect->count_reserved + bootsect->count_fat * sect_per_fat;
