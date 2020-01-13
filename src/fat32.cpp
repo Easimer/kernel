@@ -92,6 +92,7 @@ static bool FS_Probe(Volume_Handle handle, void** user) {
     bool ret = false;
     u8 buf_bootsect[512];
     u8 buf_infosect[512];
+    u8 buf_fat[512];
     auto bootsect = (FAT32_Boot_Sector*)buf_bootsect;
     auto infosect = (FAT32_Info_Sector*)buf_infosect;
 
@@ -116,20 +117,35 @@ static bool FS_Probe(Volume_Handle handle, void** user) {
             bool is_signature = infosect->signature == 0x41615252 && infosect->sector_signature == 0x61417272;
             bool version_ok = bootsect->version == 0x0000;
 
-            ret = bs_signature && is_signature && version_ok;
+            if(Volume_Read_Blocks(handle, buf_fat, bootsect->count_reserved, 1)) {
+                u32* fat = (u32*)buf_fat;
+                u32 cluster0 = fat[0];
+                u32 cluster0eoc = fat[1];
 
-            if(ret) {
-                auto state = (FAT32_State*)kmalloc(sizeof(FAT32_State));
-                ASSERT(state);
-                state->vol = handle;
-                state->sectors_per_cluster = bootsect->sectors_per_cluster;
-                state->sector_fat0 = bootsect->count_reserved;
-                state->sector_info = bootsect->sector_infosector;
-                state->sector_count = bootsect->total_sectors == 0 ? bootsect->total_sectors32 : bootsect->total_sectors;
-                state->cluster_root_dir = bootsect->cluster_root_directory;
-                state->sector_cache_index = 0xFFFFFFFF;
+                auto fat_id = bootsect->media;
+                u32 cluster0_expected = 0x0FFFFF00 | fat_id;
 
-                *user = state;
+                bool cluster0_ok = (cluster0 == cluster0_expected) && (cluster0eoc == 0x0FFFFFFF);
+
+                ret = bs_signature && is_signature && version_ok && cluster0_ok;
+
+                if(ret) {
+                    auto state = (FAT32_State*)kmalloc(sizeof(FAT32_State));
+                    ASSERT(state);
+                    state->vol = handle;
+                    state->sectors_per_cluster = bootsect->sectors_per_cluster;
+                    state->sector_fat0 = bootsect->count_reserved;
+                    state->sector_info = bootsect->sector_infosector;
+                    state->sector_count = bootsect->total_sectors == 0 ? bootsect->total_sectors32 : bootsect->total_sectors;
+                    state->cluster_root_dir = bootsect->cluster_root_directory;
+                    state->sector_cache_index = 0xFFFFFFFF;
+
+                    *user = state;
+
+                    // Precache first sector of FAT
+                    memcpy(state->sector_cache, buf_fat, 512);
+                    state->sector_cache_index = bootsect->count_reserved;
+                }
             }
         } else {
             logprintf("\tFailed to read the information sector\n");
