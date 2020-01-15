@@ -50,6 +50,7 @@ struct FAT32_File {
     u32 current_cluster;
     u32 offset;
     u32 size;
+    u32 cluster_dirent; // the cluster where this file's dirent is stored
 };
 
 struct FAT32_State {
@@ -61,6 +62,7 @@ struct FAT32_State {
     u32 cluster_root_dir; // cluster of root directory
     u32 sector_offset_data_region; // First sector of the data region
     u32 cluster_size; // cluster size in bytes
+    u32 sectors_per_fat; // number of sectors in a FAT
 
     u32 cluster_cache_index; // (0xFFFFFFFF -> cache is invalid)
     bool cluster_cache_dirty;
@@ -110,6 +112,24 @@ static inline u32 ClusterIndexToFATSectorIndex(FAT32_State* fs, u32 cluster_idx)
     return cluster_idx / 128;
 }
 
+static void FlushFATPage(FAT32_State* fs) {
+    u32 sector_offset = fs->sector_fat0 + fs->fat_cache_index;
+    logprintf("FAT32: evicting FAT page #%d (sector=%x) from cache\n", fs->fat_cache_index, sector_offset);
+    Volume_Write_Blocks(fs->vol, fs->fat_cache, sector_offset, 1);
+    fs->fat_cache_dirty = false;
+}
+
+static void FlushClusterCache(FAT32_State* fs) {
+    u32 sector_offset;
+    if(fs->cluster_cache_dirty) {
+        // Write cached sector back
+        sector_offset = fs->sector_offset_data_region + (fs->cluster_cache_index - 2) * fs->sectors_per_cluster;
+        //logprintf("FAT32: evicting cluster #%d (sector=%x) from cache\n", fs->cluster_cache_index, sector_offset);
+        Volume_Write_Blocks(fs->vol, fs->cluster_cache, sector_offset, fs->sectors_per_cluster);
+        fs->cluster_cache_dirty = false;
+    }
+}
+
 static u8* LoadCluster(FAT32_State* fs, u32 cluster_idx) {
     ASSERT(fs);
     u8* ret = fs->cluster_cache;
@@ -118,13 +138,7 @@ static u8* LoadCluster(FAT32_State* fs, u32 cluster_idx) {
     // TODO: range check sector_idx
 
     if(fs->cluster_cache_index != cluster_idx) {
-        if(fs->cluster_cache_dirty) {
-            // Write cached sector back
-            sector_offset = fs->sector_offset_data_region + (fs->cluster_cache_index - 2) * fs->sectors_per_cluster;
-            //logprintf("FAT32: evicting cluster #%d (sector=%x) from cache\n", fs->cluster_cache_index, sector_offset);
-            Volume_Write_Blocks(fs->vol, fs->cluster_cache, sector_offset, fs->sectors_per_cluster);
-            fs->cluster_cache_dirty = false;
-        }
+        FlushClusterCache(fs);
         // Load new cluster
         sector_offset = fs->sector_offset_data_region + (cluster_idx - 2) * fs->sectors_per_cluster;
         //logprintf("Cluster Idx: %x Sectors per cluster: %d Data offset: %x -> Sector offset: %x\n", cluster_idx, fs->sectors_per_cluster, fs->sector_offset_data_region, sector_offset);
@@ -145,10 +159,9 @@ static inline char ToUpper(char ch) {
 
 static void LoadFATPage(FAT32_State* fs, u32 page) {
     u32 sector_offset;
+    
     if(fs->fat_cache_dirty) {
-        sector_offset = fs->sector_fat0 + fs->fat_cache_index;
-        logprintf("FAT32: evicting FAT page #%d (sector=%x) from cache\n", fs->fat_cache_index, sector_offset);
-        Volume_Write_Blocks(fs->vol, fs->fat_cache, sector_offset, 1);
+        FlushFATPage(fs);
     }
     
     // Load new page
@@ -168,6 +181,53 @@ static u32 GetFATEntry(FAT32_State* fs, u32 cluster_idx) {
     return ((u32*)fs->fat_cache)[off];
 }
 
+static void SetFATEntry(FAT32_State* fs, u32 cluster_idx, u32 value, bool flush = false) {
+    ASSERT(fs);
+    auto fat_page = ClusterIndexToFATSectorIndex(fs, cluster_idx);
+    if(fs->fat_cache_index != fat_page) {
+        LoadFATPage(fs, fat_page);
+    }
+    auto off = cluster_idx & 127;
+    ((u32*)fs->fat_cache)[off] = value;
+    fs->fat_cache_dirty = true;
+
+    if(flush) {
+        FlushFATPage(fs);
+    }
+}
+
+// Returns 0 on failure
+static u32 AllocateCluster(FAT32_State* fs) {
+    ASSERT(fs);
+    u32 ret = 0;
+    u32* fat = (u32*)fs->fat_cache;
+
+    for(u32 i = 0; i < fs->sectors_per_fat; i++) {
+        LoadFATPage(fs, i);
+        for(u32 cls = 0; cls < 128; cls++) {
+            if(fat[cls] == 0) {
+                fat[cls] = 0x0FFFFFFF;
+                fs->fat_cache_dirty = true;
+            }
+        }
+    }
+
+    return ret;
+}
+
+static u32 AppendCluster(FAT32_State* fs, u32 cluster_idx) {
+    ASSERT(fs);
+    u32 ret = 0;
+
+    ret = AllocateCluster(fs);
+    if(ret != 0) {
+        SetFATEntry(fs, cluster_idx, ret);
+    }
+
+    return ret;
+}
+
+// Returns the sector index of the directory entry
 static u32 FindClusterOfEntryInDirectory(FAT32_State* fs, u32 cluster_dir, Dirent* dent, const char* path, u32 path_len) {
     u32 ret = 0;
     ASSERT(fs);
@@ -237,7 +297,8 @@ static u32 FindClusterOfEntryInDirectory(FAT32_State* fs, u32 cluster_dir, Diren
                 }
 
                 if(found) {
-                    ret = (((u32)ent.cluster_hi) << 16) | (u32)ent.cluster_lo;
+                    //ret = (((u32)ent.cluster_hi) << 16) | (u32)ent.cluster_lo;
+                    ret = cluster_dir;
 
                     if(dent != NULL) {
                         memcpy(dent, &ent, sizeof(ent));
@@ -269,6 +330,7 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
     bool found = false;
     u32 start_cluster = 0;
     Dirent dent;
+    u32 dirent_cluster = 0;
 
     if(state->free_file_handles > 0) {
         while(1) {
@@ -280,22 +342,23 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
             //logprintf("Fragment: '%s' L=%d\n", P, slash_idx);
             bool is_subdirectory = false, is_readonly = false;
 
-            u32 next_cluster = FindClusterOfEntryInDirectory(state, current_directory_cluster, &dent, P, slash_idx);
+            dirent_cluster = FindClusterOfEntryInDirectory(state, current_directory_cluster, &dent, P, slash_idx);
 
             is_subdirectory = (dent.attr & DEA_Subdirectory) != 0;
             is_readonly = (dent.attr & DEA_ReadOnly) != 0;
 
-            if(next_cluster != 0) {
+            if(dirent_cluster != 0) {
+                u32 dent_cluster = (((u32)dent.cluster_hi) << 16) | (u32)dent.cluster_lo;
                 bool end_of_path = P[slash_idx] == '\0';
                 if(end_of_path) {
                     if(!is_subdirectory) {
-                        start_cluster = next_cluster;
+                        start_cluster = dent_cluster;
                         found = true;
                     }
                     break;
                 }
 
-                current_directory_cluster = next_cluster;
+                current_directory_cluster = dent_cluster;
 
                 P += slash_idx + 1;
                 slash_idx = 0;
@@ -315,6 +378,7 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
                     f.offset = 0;
                     f.valid = true;
                     f.size = dent.size;
+                    f.cluster_dirent = dirent_cluster;
                     ret = (Filesystem_File_Handle)fd;
                     break;
                 }
@@ -337,8 +401,35 @@ static void FS_Close(void* user, Filesystem_File_Handle fd) {
 
     if(fd < FAT32_MAX_OPEN_FILES) {
         if(state->files[fd].valid) {
+            auto& F = state->files[fd];
+            // TODO: write back directory entry
+            // (1) iterate over dirents
+            auto entries = (Dirent*)LoadCluster(state, F.cluster_dirent);
+            bool found = false;
+            auto entries_per_cluster = state->cluster_size / sizeof(Dirent);
+            u32 cluster_hi = (F.cluster_start) >> 16;
+            u32 cluster_lo = (F.cluster_start) & 0xFFFF;
+            for(u32 i = 0; i < entries_per_cluster && !found; i++) {
+                auto& ent = entries[i];
+                u8 buf[16];
+                int c = 7;
+
+                if(ent.filename[0] == 0x00) {
+                    // Empty entry
+                    continue;
+                }
+
+                if(ent.cluster_hi == cluster_hi && ent.cluster_lo == cluster_lo) {
+                    ent.size = F.size;
+                    found = true;
+                }
+            }
+
+            ASSERT(found);
+            FlushClusterCache(state);
+            
             // TODO: flush cache when it's eventually implemented
-            state->files[fd].valid = false;
+            F.valid = false;
             state->free_file_handles += 1;
 
             ASSERT(state->free_file_handles <= FAT32_MAX_OPEN_FILES);
@@ -394,6 +485,12 @@ static s32 FS_Write(void* user, Filesystem_File_Handle fd, const void* src, s32 
     auto state = (FAT32_State*)user;
     ASSERT(state);
     s32 ret = -1;
+    if(fd < FAT32_MAX_OPEN_FILES) {
+        if(state->files[fd].valid) {
+            auto& F = state->files[fd];
+            auto cluster = LoadCluster(state, F.current_cluster);
+        }
+    }
     return ret;
 }
 
@@ -541,6 +638,7 @@ static bool FS_Probe(Volume_Handle handle, void** user) {
                     ASSERT((state->cluster_size & (state->cluster_size - 1)) == 0);
 
                     auto sect_per_fat = (bootsect->sectors_per_fat == 0) ? bootsect->sectors_per_fat32 : bootsect->sectors_per_fat;
+                    state->sectors_per_fat = sect_per_fat;
                     state->sector_offset_data_region = bootsect->count_reserved + bootsect->count_fat * sect_per_fat;
 
                     for(int fd = 0; fd < FAT32_MAX_OPEN_FILES; fd++) {

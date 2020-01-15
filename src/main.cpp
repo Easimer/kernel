@@ -44,6 +44,19 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     // Detect filesystems
     Volume_Detect_Filesystems();
 
+    auto fd = File_Open(0, "/LOREM.TXT", O_RDONLY);
+    if(fd != -1) {
+        u8 buf[33];
+        while(!File_EOF(fd)) {
+            auto rd = File_Read(buf, 1, 32, fd);
+            if(rd != -1) {
+                buf[rd] = 0;
+                logprintf((char*)buf);
+            }
+        }
+        File_Close(fd);
+    }
+
     const char* argv[] = {"/COMMAND.EXE"};
     int ret = Execute_Program(0, "/COMMAND.EXE", 1, argv);
     logprintf("COMMAND.EXE returned with code %d\n", ret);
