@@ -5,7 +5,7 @@
 
 static volatile u32 ticks;
 
-static void TimerHandler(const Registers* regs) {
+static void TimerHandler(Registers* regs) {
     ticks++;
 }
 

@@ -1,5 +1,7 @@
 #include "common.h"
 #include "logging.h"
+#include "interrupts.h"
+#include "syscalls.h"
 
 #include <stdarg.h>
 
@@ -13,10 +15,16 @@ struct Log_Destination_Entry {
 
 static Log_Destination_Entry gEntries[LOG_DEST_ENTRY_MAXCOUNT];
 
+static void Syscall_Print(Registers* regs) {
+    Log_LogString((const char*)regs->esi);
+}
+
 void Log_Init() {
     for(int i = 0; i < LOG_DEST_ENTRY_MAXCOUNT; i++) {
         gEntries[i].occupied = false;
     }
+
+    RegisterSyscallHandler(SYSCALL_PRINT, Syscall_Print);
 }
 
 void Log_Register(void* user, const Log_Destination* dest) {

@@ -25,10 +25,10 @@ struct Registers {
     u32 eip, cs, eflags, useresp, ss;
 } PACKED;
 
-using Interrupt_Handler = void(*)(const Registers* regs);
+using Interrupt_Handler = void(*)(Registers* regs);
 
 void Interrupts_Setup();
 void Interrupts_Register_Handler(u32 i, Interrupt_Handler handler);
-void RegisterSyscallHandler(u32 id, void(*func)(const Registers* regs));
+void RegisterSyscallHandler(u32 id, void(*func)(Registers* regs));
 
 #endif /* KERNEL_INTERRUPTS_H */

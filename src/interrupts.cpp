@@ -190,7 +190,7 @@ static void GDT_Setup() {
     GDT_Init(&gdtd);
 }
 
-static void GeneralProtectionFault(const Registers* regs) {
+static void GeneralProtectionFault(Registers* regs) {
     logprintf("======================\n");
     logprintf("GENERAL PROTECTION FAULT\n");
     logprintf("EAX: %x EBX: %x ECX: %x EDX: %x\n", regs->eax, regs->ebx, regs->ecx, regs->edx);
@@ -205,7 +205,7 @@ static void GeneralProtectionFault(const Registers* regs) {
 
 struct Syscall_Handler {
     u32 id;
-    void(*func)(const Registers* regs);
+    void(*func)(Registers* regs);
 };
 
 #define MAX_SYSCALLS (128)
@@ -213,7 +213,7 @@ struct Syscall_Handler {
 static Syscall_Handler gaSyscallHandlers[MAX_SYSCALLS];
 static u32 giSyscallHandlersLastIndex = 0;
 
-void RegisterSyscallHandler(u32 id, void(*func)(const Registers* regs)) {
+void RegisterSyscallHandler(u32 id, void(*func)(Registers* regs)) {
     if(giSyscallHandlersLastIndex < MAX_SYSCALLS) {
         auto& SCH = gaSyscallHandlers[giSyscallHandlersLastIndex];
         SCH.id = id;
@@ -222,7 +222,7 @@ void RegisterSyscallHandler(u32 id, void(*func)(const Registers* regs)) {
     }
 }
 
-static void SyscallHandler(const Registers* regs) {
+static void SyscallHandler(Registers* regs) {
     auto id = regs->eax;
     for(u32 i = 0; i < giSyscallHandlersLastIndex; i++) {
         if(gaSyscallHandlers[i].id == id) {
