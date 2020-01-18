@@ -254,7 +254,23 @@ void File_Seek(int fd, s32 offset, whence_t whence) {
     }
 }
 
-int File_Tell(int fd);
+int File_Tell(int fd) {
+    int ret = -1;
+
+    if(fd >= 0 && fd < MAX_OPEN_FILES) {
+        if(gaFDMap[fd].used) {
+            auto& f = gaFDMap[fd];
+            ASSERT(f.vol < giVolumesLastIndex);
+            auto& V = gaVolumes[f.vol];
+            if(V.filesystem.desc->Seek) {
+                ret = V.filesystem.desc->Tell(V.filesystem.user, f.fd);
+            }
+        }
+    }
+
+    return ret;
+}
+
 void Sync(Volume_Handle volume) {
     ASSERT(volume < giVolumesLastIndex);
     auto& V = gaVolumes[volume];
