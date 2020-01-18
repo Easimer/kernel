@@ -3,6 +3,8 @@
 #include "disk.h"
 #include "utils.h"
 #include "logging.h"
+#include "interrupts.h"
+#include "syscalls.h"
 
 #define MAX_VOLUMES (128)
 #define MAX_FILESYSTEMS (8)
@@ -95,7 +97,7 @@ s32 Volume_Write_Blocks(Volume_Handle vol, const void* buffer, u32 offset, u32 c
     return ret;
 }
 
-void Volume_Detect_Filesystems() {
+static void Volume_Detect_Filesystems() {
     for(u32 vol = 0; vol < giVolumesLastIndex; vol++) {
         bool OK = false;
         auto& V = gaVolumes[vol];
@@ -293,4 +295,43 @@ int File_EOF(int fd) {
     }
 
     return ret;
+}
+
+static void SC_Handler(Registers* regs) {
+    int res = regs->eax;
+    switch(regs->eax) {
+        case SYSCALL_OPEN:
+        res = File_Open(regs->ebx, (char*)regs->edx, regs->ecx);
+        break;
+        case SYSCALL_CLOSE:
+        File_Close(regs->ebx);
+        break;
+        case SYSCALL_READ:
+        res = File_Read((void*)regs->edi, regs->ebx, regs->ecx, regs->edx);
+        break;
+        case SYSCALL_WRITE:
+        res = File_Write((void*)regs->esi, regs->ebx, regs->ecx, regs->edx);
+        break;
+        case SYSCALL_SEEK:
+        res = 0;
+        File_Seek(regs->edx, regs->ecx, (whence_t)regs->ebx);
+        break;
+        case SYSCALL_TELL:
+        res = File_Tell(regs->edx);
+        break;
+    }
+    regs->eax = res;
+}
+
+void Volume_Init() {
+    // Detect filesystems
+    Volume_Detect_Filesystems();
+
+    // Register syscalls
+    RegisterSyscallHandler(SYSCALL_OPEN, SC_Handler);
+    RegisterSyscallHandler(SYSCALL_CLOSE, SC_Handler);
+    RegisterSyscallHandler(SYSCALL_READ, SC_Handler);
+    RegisterSyscallHandler(SYSCALL_WRITE, SC_Handler);
+    RegisterSyscallHandler(SYSCALL_SEEK, SC_Handler);
+    RegisterSyscallHandler(SYSCALL_TELL, SC_Handler);
 }

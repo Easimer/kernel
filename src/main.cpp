@@ -41,8 +41,8 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     // Probe partitions
     Disk_Partition_Probe();
 
-    // Detect filesystems
-    Volume_Detect_Filesystems();
+    // Initialize volume manager
+    Volume_Init();
 
     auto fd = File_Open(0, "/LOREM.TXT", O_RDONLY);
     if(fd != -1) {

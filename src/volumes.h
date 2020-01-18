@@ -60,7 +60,7 @@ struct Filesystem_Descriptor {
 using Filesystem_Register =  Filesystem_Descriptor* (*)();
 
 void Filesystem_Register_Filesystem(Filesystem_Register init);
-void Volume_Detect_Filesystems();
+void Volume_Init();
 
 int File_Open(Volume_Handle volume, const char* path, mode_t flags);
 void File_Close(int fd);
