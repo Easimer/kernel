@@ -6,7 +6,7 @@ CXXFLAGS=-g -fno-omit-frame-pointer -std=c++17 -ffreestanding -O2 -Wall -Wextra 
 CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
 CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)
 
-VERSION=0.1
+VERSION=0.2
 KERNEL_FILENAME=kernel-$(VERSION).img
 KERNEL_CORE_OBJECTS=boot.S.o main.cpp.o logging.cpp.o port_io.S.o multiboot2.cpp.o utils.cpp.o memory.cpp.o simd.S.o exec.cpp.o
 KERNEL_DRIVER_CORE_OBJECTS=pci.cpp.o interrupts.cpp.o interrupts.S.o disk.cpp.o volumes.cpp.o
