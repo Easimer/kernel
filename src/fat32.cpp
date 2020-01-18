@@ -138,6 +138,10 @@ struct Dirent {
 
 #define CLUSTER_HI(idx) (((u32)(idx)) >> 16)
 #define CLUSTER_LO(idx) (((u32)(idx)) & 0xFFFF)
+// End-of-chain marker
+#define CLUSTER_EOC (0x0FFFFFFF)
+
+#define MARK_CLUSTER_CACHE_DIRTY(fs) fs->cluster_cache_dirty = true
 
 void ClusterIndexWords(Virtual_Cluster_Index vci, u16* hi, u16* lo) {
     *hi = CLUSTER_HI(vci);
@@ -258,13 +262,20 @@ static Virtual_Cluster_Index AllocateCluster(FAT32_State* fs) {
         u32* fat = (u32*)fs->fat_cache;
         for(u32 cls = 0; cls < 128 && ret == 0; cls++) {
             if(fat[cls] == 0) {
-                fat[cls] = 0x0FFFFFFF;
+                fat[cls] = CLUSTER_EOC;
                 fs->fat_cache_dirty = true;
                 ret = i * 128 + cls;
                 logprintf("FAT32: Alloc page=%x idx=%x cls=%x\n", i, cls, ret);
-                // TODO: this call has a side effect that makes this
-                // work
-                SetFATEntry(fs, ret, 0x0FFFFFFF);
+
+                // Zero-fill the newly allocated cluster
+                
+                // Save cached cluster index
+                auto old_cached_cluster = fs->cluster_cache_index;
+                LoadCluster(fs, ret);
+                memset(fs->cluster_cache, 0, fs->cluster_size);
+                fs->cluster_cache_dirty = true;
+                // Restore old cluster
+                LoadCluster(fs, old_cached_cluster);
             }
         }
     }
@@ -324,15 +335,49 @@ static Virtual_Cluster_Index NextCluster(FAT32_State* fs, Virtual_Cluster_Index 
 
     logprintf("Next in chain cluster of %x is %x\n", cluster_idx, entry);
 
-    if(entry == 0x0FFFFFFF) {
+    if(entry == CLUSTER_EOC) {
         ret = AllocateCluster(fs);
         logprintf("\tAllocated new cluster %x\n", ret);
         if(ret != 0) {
             SetFATEntry(fs, cluster_idx, ret);
-            SetFATEntry(fs, ret, 0x0FFFFFFF);
+            SetFATEntry(fs, ret, CLUSTER_EOC);
         }
     } else {
         ret = entry;
+    }
+
+    return ret;
+}
+
+// Given a directory cluster ID it inserts the given Dirent into the directory.
+// Returns true on success, false when the FS is out of space.
+static bool InsertIntoDirectory(FAT32_State* fs, Virtual_Cluster_Index cluster_directory, const Dirent& ent) {
+    bool ret = false, out_of_space = false;
+    ASSERT(fs);
+    Dirent* entries;
+    const auto count_ents = fs->cluster_size / sizeof(Dirent);
+
+    // Look for a free entry
+    // If we didn't found a free entry: nextcluster
+    Virtual_Cluster_Index current = cluster_directory;
+    entries = (Dirent*)LoadCluster(fs, current);
+
+    while(!ret && !out_of_space) {
+        for(u32 idx = 0; idx < count_ents && !ret; idx++) {
+            if(entries[idx].filename[0] == 0x00) {
+                memcpy(entries + idx, &ent, sizeof(Dirent));
+                MARK_CLUSTER_CACHE_DIRTY(fs);
+                ret = true;
+            }
+        }
+
+        if(!ret) {
+            current = NextCluster(fs, current);
+            // TODO: somehow we should make sure we allocate at most one new cluster
+            if(current == 0) {
+                out_of_space = true;
+            }
+        }
     }
 
     return ret;
@@ -481,56 +526,21 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
             } else {
                 if(flags & O_CREAT) {
                     if(current_directory_cluster != 0 && end_of_path) {
-                        bool inserted_dent = false;
                         bool out_of_space = false;
-                        // TODO: move this into a subroutine
-                        while(!inserted_dent && !out_of_space) {
-                            auto dirents = (Dirent*)LoadCluster(state, current_directory_cluster);
-                            for(u32 i = 0; i < state->cluster_size / sizeof(Dirent); i++) {
-                                auto& ent = dirents[i];
-                                if(ent.filename[0] == 0x00) {
-                                    logprintf("Found free dirent %x\n", i);
-                                    memset(&ent, 0, sizeof(Dirent));
-                                    start_cluster = AllocateCluster(state);
-                                    ClusterIndexWords(start_cluster, &ent.cluster_hi, &ent.cluster_lo);
-                                    PutFilenameIntoDirent(ent, P);
-                                    found = true;
-                                    dent = ent;
-                                    inserted_dent = true;
-                                    logprintf("FAT32: created file\n");
-                                    dirent_cluster = current_directory_cluster;
-                                    logprintf("FAT32: start cluster=%x\n", start_cluster);
-                                    state->cluster_cache_dirty = true;
-
-                                    // Sync
-                                    FlushClusterCache(state);
-                                    FlushFATPage(state);
-                                    break;
-                                }
-                            }
-
-                            if(!inserted_dent) {
-                                current_directory_cluster = NextCluster(state, current_directory_cluster);
-                                if(current_directory_cluster == 0) {
-                                    out_of_space = true;
-                                    break;
-                                }
-                            } else {
-                                break;
-                            }
-                        }
-
-                        if(inserted_dent) {
-                            break;
+                        Dirent ent;
+                        memset(&ent, 0, sizeof(Dirent));
+                        start_cluster = AllocateCluster(state);
+                        ClusterIndexWords(start_cluster, &ent.cluster_hi, &ent.cluster_lo);
+                        PutFilenameIntoDirent(ent, P);
+                        dirent_cluster = current_directory_cluster;
+                        dent = ent;
+                        if(InsertIntoDirectory(state, current_directory_cluster, ent)) {
+                            found = true;
                         } else {
-                            ASSERT(out_of_space);
-                            if(out_of_space) {
-                                logprintf("FAT32: couldn't create file: OUT OF SPACE\n");
-                                break;
-                            } else {
-                                
-                            }
+                            out_of_space = true;
+                            logprintf("FAT32: couldn't create file: OUT OF SPACE\n");
                         }
+                        break;
                     } else {
                         logprintf("FAT32: Would create file, but path doesn't exist!\n");
                         break;
@@ -915,7 +925,7 @@ static bool FS_Probe(Volume_Handle handle, void** user) {
                 auto fat_id = bootsect->media;
                 u32 cluster0_expected = 0x0FFFFF00 | fat_id;
 
-                bool cluster0_ok = (cluster0 == cluster0_expected) && (cluster0eoc == 0x0FFFFFFF);
+                bool cluster0_ok = (cluster0 == cluster0_expected) && (cluster0eoc == CLUSTER_EOC);
 
                 ret = bs_signature && is_signature && version_ok && cluster0_ok;
 
