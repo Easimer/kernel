@@ -273,7 +273,7 @@ static Virtual_Cluster_Index AllocateCluster(FAT32_State* fs) {
                 auto old_cached_cluster = fs->cluster_cache_index;
                 LoadCluster(fs, ret);
                 memset(fs->cluster_cache, 0, fs->cluster_size);
-                fs->cluster_cache_dirty = true;
+                MARK_CLUSTER_CACHE_DIRTY(fs);
                 // Restore old cluster
                 LoadCluster(fs, old_cached_cluster);
             }
@@ -703,7 +703,7 @@ static s32 FS_Write(void* user, Filesystem_File_Handle fd, const void* src, s32 
                 memcpy(cluster + cluster_offset, src, bytes);
                 F.offset += bytes;
                 ret += bytes;
-                state->cluster_cache_dirty = true;
+                MARK_CLUSTER_CACHE_DIRTY(state);
 
                 if(bytes == cluster_remain) {
                     auto next_cluster = NextCluster(state, F.current_cluster);
@@ -716,7 +716,7 @@ static s32 FS_Write(void* user, Filesystem_File_Handle fd, const void* src, s32 
             } else {
                 auto src8 = (u8*)src;
                 memcpy(cluster + cluster_offset, src, cluster_remain);
-                state->cluster_cache_dirty = true;
+                MARK_CLUSTER_CACHE_DIRTY(state);
                 F.offset += cluster_remain;
                 bytes -= cluster_remain;
                 src8 += cluster_remain;
@@ -735,7 +735,7 @@ static s32 FS_Write(void* user, Filesystem_File_Handle fd, const void* src, s32 
                     cluster = (u8*)LoadCluster(state, F.current_cluster);
 
                     memcpy(cluster, src8, bytes_remain);
-                    state->cluster_cache_dirty = true;
+                    MARK_CLUSTER_CACHE_DIRTY(state);
 
                     F.offset += bytes_remain;
                     bytes -= bytes_remain;
