@@ -431,9 +431,17 @@ static bool IDE_Disk_Write(void* user, u32* blocks_written, const void* buf, u32
                         PrintError(ctrl, drive->drive, err);
                         *blocks_written = 0;
                     }
+                } else {
+                    logprintf("IDE: writing ATAPI is unsupported!\n");
                 }
+            } else {
+                logprintf("IDE: write offset is out of bounds!\n");
             }
+        } else {
+            logprintf("IDE: code requested null write!\n");
         }
+    } else {
+        logprintf("IDE: code tried to write from a drive not present!\n");
     }
 
     return ret;

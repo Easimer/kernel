@@ -21,12 +21,13 @@ struct Filesystem;
 Filesystem* Volume_Get_Filesystem(Volume_Handle vol);
 
 using Filesystem_File_Handle = s32;
-enum mode_t {
-    O_RDONLY = 1,
-    O_WRONLY = 2,
-    O_RDWR = 3,
-    O_CREAT = 4,
-};
+
+using mode_t = int;
+
+#define O_RDONLY (1)
+#define O_WRONLY (2)
+#define O_RDWR (3)
+#define O_CREAT (4)
 
 enum class whence_t {
     SET, CUR, END

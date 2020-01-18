@@ -70,6 +70,20 @@ s32 Disk_Read_Blocks(u32 disk, void* buf, u32 block_count, u32 block_offset) {
 
 s32 Disk_Write_Blocks(u32 disk, const void* buf, u32 block_count, u32 block_offset) {
     s32 ret = -1;
+    ASSERT(block_count < 0x7FFFFFFF);
+
+    if(disk < giDisksLastIndex) {
+        auto& D = gaDisks[disk];
+        ASSERT(D.desc);
+        if(D.desc->Write) {
+            u32 w;
+            if(D.desc->Write(D.user, &w, buf, block_count, block_offset)) {
+                ret = (s32)(w & 0x7FFFFFFF);
+            }
+        } else {
+            // Operation is unsupported by the device
+        }
+    }
 
     return ret;
 }

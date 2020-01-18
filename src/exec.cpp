@@ -2,10 +2,12 @@
 #include "exec.h"
 #include "exec_fmt.h"
 #include "volumes.h"
+#include "logging.h"
 
 int Execute_Program(Volume_Handle volume, const char* path, int argc, const char** argv) {
     int ret = EXEC_ERR_NOTFOUND, rd;
 
+    logprintf("Execute_Program(%s);\n", path);
     int fd = File_Open(volume, path, O_RDONLY);
     if(fd != -1) {
         Exec_Header hdr;

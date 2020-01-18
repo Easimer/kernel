@@ -3,10 +3,29 @@
 #include "logging.h"
 #include "simd.h"
 
+struct Stack_Frame {
+	Stack_Frame* ebp;
+	u32 eip;
+} PACKED;
+
+static void DumpStackTrace(u32 max_frames) {
+	Stack_Frame* stack;
+
+	asm("movl %%ebp, %0" : "=r"(stack) ::);
+	for(u32 frame = 0; stack && frame < max_frames; frame++) {
+		logprintf("%x\n", stack->eip);
+		stack = stack->ebp;
+	}
+}
+
 void do_assert(const char* expr, s32 line, const char* file, const char* function) {
     logprintf("========================\nAssertion failed: %s\nFile: %s\nFunction: %s:%d\n", expr, file, function, line);
     
-    while(1);
+	logprintf("Stack trace:\n");
+	DumpStackTrace(32);
+    while(1) {
+		asm volatile("hlt");
+	}
 }
 
 void memset(void* dst, int value, u32 len) {

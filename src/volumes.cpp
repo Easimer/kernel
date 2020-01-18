@@ -55,7 +55,12 @@ s32 Volume_Read_Blocks(Volume_Handle vol, void* buffer, u32 offset, u32 count) {
         if(count > 0) {
             auto& V = gaVolumes[vol];
             auto disk = V.desc.disk;
-            ret = Disk_Read_Blocks(disk, buffer, count, offset + V.desc.offset);
+            if(offset < V.desc.length && offset + count < V.desc.length) {
+                ret = Disk_Read_Blocks(disk, buffer, count, offset + V.desc.offset);
+            } else {
+                logprintf("VolMan: read out of range: %x + 0:%x\n", offset, count);
+            }
+            ASSERT(offset < V.desc.length && offset + count < V.desc.length);
         } else {
             ret = 0;
         }
@@ -67,11 +72,20 @@ s32 Volume_Read_Blocks(Volume_Handle vol, void* buffer, u32 offset, u32 count) {
 s32 Volume_Write_Blocks(Volume_Handle vol, const void* buffer, u32 offset, u32 count) {
     s32 ret = -1;
 
+    ASSERT(vol < giVolumesLastIndex);
+    ASSERT(buffer);
+
     if(vol < giVolumesLastIndex && buffer) {
         if(count > 0) {
             auto& V = gaVolumes[vol];
             auto disk = V.desc.disk;
-            ret = Disk_Write_Blocks(disk, buffer, count, offset + V.desc.offset);
+            
+            if(offset < V.desc.length && offset + count < V.desc.length) {
+                ret = Disk_Write_Blocks(disk, buffer, count, offset + V.desc.offset);
+            } else {
+                logprintf("VolMan: writing out of range: %x + 0:%x\n", offset, count);
+            }
+            ASSERT(offset < V.desc.length && offset + count < V.desc.length);
         } else {
             ret = 0;
         }
@@ -197,7 +211,32 @@ int File_Read(void* ptr, u32 size, u32 nmemb, int fd) {
     return ret;
 }
 
-int File_Write(const void* ptr, u32 size, u32 nmemb, int fd);
+int File_Write(const void* ptr, u32 size, u32 nmemb, int fd) {
+    int ret = -1;
+
+    if(ptr && size > 0 && fd >= 0 && fd < MAX_OPEN_FILES) {
+        if(nmemb > 0) {
+            if(gaFDMap[fd].used) {
+                auto& f = gaFDMap[fd];
+                ASSERT(f.vol < giVolumesLastIndex);
+                auto& V = gaVolumes[f.vol];
+                s32 res = V.filesystem.desc->Write(V.filesystem.user, f.fd, ptr, size * nmemb);
+                if(res > 0) {
+                    ASSERT(res % size == 0);
+                    ret = res / size;
+                } else {
+                    logprintf("WR ERROR\n");
+                }
+            }
+        } else {
+            ret = 0;
+        }
+    } else {
+        // Bad argument(s)
+    }
+
+    return ret;
+}
 
 void File_Seek(int fd, s32 offset, whence_t whence) {
     if(fd >= 0 && fd < MAX_OPEN_FILES) {
@@ -205,6 +244,7 @@ void File_Seek(int fd, s32 offset, whence_t whence) {
             auto& f = gaFDMap[fd];
             ASSERT(f.vol < giVolumesLastIndex);
             auto& V = gaVolumes[f.vol];
+            logprintf("user: %x\n", V.filesystem.user);
             V.filesystem.desc->Seek(V.filesystem.user, f.fd, whence, offset);
         } else {
             //logprintf("FSEEK:: free fd\n");
@@ -215,7 +255,11 @@ void File_Seek(int fd, s32 offset, whence_t whence) {
 }
 
 int File_Tell(int fd);
-void Sync(Volume_Handle volume);
+void Sync(Volume_Handle volume) {
+    ASSERT(volume < giVolumesLastIndex);
+    auto& V = gaVolumes[volume];
+    V.filesystem.desc->Sync(V.filesystem.user);
+}
 
 int File_EOF(int fd) {
     int ret = -1;
