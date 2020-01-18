@@ -50,10 +50,6 @@ public:
     constexpr Cluster_Index() : value(0) {}
     explicit constexpr Cluster_Index(u32 val) : value(val) {}
     constexpr u32 operator=(u32 val) { value = val; return value;}
-    constexpr Cluster_Index<T>& operator=(const Cluster_Index<T>& other) {
-        value = other.value;
-        return *this;
-    }
     template<typename U> void operator=(const Cluster_Index<U>&) = delete;
     constexpr operator u32() const { return value; }
     constexpr operator u32&() { return value; }
@@ -143,16 +139,14 @@ struct Dirent {
 
 #define MARK_CLUSTER_CACHE_DIRTY(fs) fs->cluster_cache_dirty = true
 
-void ClusterIndexWords(Virtual_Cluster_Index vci, u16* hi, u16* lo) {
-    *hi = CLUSTER_HI(vci);
-    *lo = CLUSTER_LO(vci);
-}
+#define ClusterIndexWords(vci, hi, lo) hi = CLUSTER_HI(vci); lo = CLUSTER_LO(vci);
 
 // -----------------------------------------------------------------------------------------
 
 // Maps a cluster index to the index of the sector where the cluster's entry
 // is located in the FAT
 static inline u32 ClusterIndexToFATPageIndex(FAT32_State* fs, Virtual_Cluster_Index cluster_idx) {
+    (void)fs;
     // One sector contains 128 doublewords
     return (u32)cluster_idx / 128;
 }
@@ -433,14 +427,13 @@ static Virtual_Cluster_Index FindClusterOfEntryInDirectory(FAT32_State* fs, Virt
             //logprintf("%% %s\n", buf);
 
             // Calc filename length
-            int len;
+            u32 len;
             for(len = 0; buf[len]; len++);
             
             if(len == path_len) {
                 found = true;
-                int i = 0;
 
-                for(int i = 0; i < len; i++) {
+                for(u32 i = 0; i < len; i++) {
                     if(buf[i] != path[i]) {
                         found = false;
                     }
@@ -471,7 +464,6 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
     ASSERT(state);
     Filesystem_File_Handle ret = -1;
 
-    bool path_end = false;
     u32 slash_idx = 0;
     auto current_directory_cluster = state->cluster_root_dir;
     auto P = path + 1; // skip initial slash
@@ -494,12 +486,11 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
             }
 
             //logprintf("Fragment: '%s' L=%d\n", P, slash_idx);
-            bool is_subdirectory = false, is_readonly = false;
+            bool is_subdirectory = false;
 
             dirent_cluster = FindClusterOfEntryInDirectory(state, current_directory_cluster, &dent, P, slash_idx);
 
             is_subdirectory = (dent.attr & DEA_Subdirectory) != 0;
-            is_readonly = (dent.attr & DEA_ReadOnly) != 0;
             bool end_of_path = P[slash_idx] == '\0';
 
             if(dirent_cluster != 0) {
@@ -519,18 +510,16 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
             } else {
                 if(flags & O_CREAT) {
                     if(current_directory_cluster != 0 && end_of_path) {
-                        bool out_of_space = false;
                         Dirent ent;
                         memset(&ent, 0, sizeof(Dirent));
                         start_cluster = AllocateCluster(state);
-                        ClusterIndexWords(start_cluster, &ent.cluster_hi, &ent.cluster_lo);
+                        ClusterIndexWords(start_cluster, ent.cluster_hi, ent.cluster_lo);
                         PutFilenameIntoDirent(ent, P);
                         dirent_cluster = current_directory_cluster;
                         dent = ent;
                         if(InsertIntoDirectory(state, current_directory_cluster, ent)) {
                             found = true;
                         } else {
-                            out_of_space = true;
                             //logprintf("FAT32: couldn't create file: OUT OF SPACE\n");
                         }
                         break;
@@ -589,8 +578,6 @@ static void FS_Close(void* user, Filesystem_File_Handle fd) {
             u32 cluster_lo = CLUSTER_LO(F.cluster_start);
             for(u32 i = 0; i < entries_per_cluster && !found; i++) {
                 auto& ent = entries[i];
-                u8 buf[16];
-                int c = 7;
 
                 if(ent.filename[0] == 0x00) {
                     // Empty entry
@@ -617,7 +604,7 @@ static void FS_Close(void* user, Filesystem_File_Handle fd) {
     }
 }
 
-static s32 FS_Read(void* user, Filesystem_File_Handle fd, void* dst, s32 bytes) {
+static s32 FS_Read(void* user, Filesystem_File_Handle fd, void* dst, u32 bytes) {
     auto state = (FAT32_State*)user;
     ASSERT(state);
     s32 ret = -1;
@@ -661,7 +648,7 @@ static s32 FS_Read(void* user, Filesystem_File_Handle fd, void* dst, s32 bytes) 
     return ret;
 }
 
-static s32 FS_Write(void* user, Filesystem_File_Handle fd, const void* src, s32 bytes) {
+static s32 FS_Write(void* user, Filesystem_File_Handle fd, const void* src, u32 bytes) {
     auto state = (FAT32_State*)user;
     ASSERT(state);
     s32 ret = -1;
@@ -673,7 +660,9 @@ static s32 FS_Write(void* user, Filesystem_File_Handle fd, const void* src, s32 
 
             // Offset inside the cluster
             auto cluster_offset = (F.offset % state->cluster_size);
-            auto cluster_remain = state->cluster_size - cluster_offset;
+            
+            ASSERT(state->cluster_size >= cluster_offset);
+            u32 cluster_remain = state->cluster_size - cluster_offset;
 
             ret = 0;
             if(bytes <= cluster_remain) {

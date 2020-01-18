@@ -30,6 +30,7 @@ Volume_Handle Volume_Register(const Volume_Descriptor* vol) {
     S.desc = *vol;
     S.filesystem.desc = NULL;
     S.filesystem.user = NULL;
+    ret = giVolumesLastIndex;
 
     logprintf("New volume registered: disk %d start %x size %x\n", vol->disk, vol->offset, vol->length);
 

@@ -6,6 +6,7 @@
 static volatile u32 ticks;
 
 static void TimerHandler(Registers* regs) {
+    (void)regs;
     ticks++;
 }
 

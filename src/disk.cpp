@@ -98,7 +98,7 @@ struct MBR_Entry {
 } PACKED;
 
 void Disk_Partition_Probe() {
-    for(int i = 0; i < giDisksLastIndex; i++) {
+    for(u32 i = 0; i < giDisksLastIndex; i++) {
         u8 mbr[512];
         s32 res = Disk_Read_Blocks(i, mbr, 1, 0);
         if(res == 1) {

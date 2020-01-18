@@ -48,7 +48,7 @@ inline void PCI_Cfg_ReadClass(PCI_Address addr, u8* dev_class, u8* dev_subclass)
 inline u32 PCI_Cfg_ReadBAR(PCI_Address addr, u32 id) {
     u32 ret = 0xFFFFFFFF;
 
-    if(id >= 0 && id < 6) {
+    if(id < 6) {
         ret = PCI_ReadCfgReg(addr, 0x10 + id);
     }
 

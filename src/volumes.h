@@ -35,8 +35,8 @@ enum class whence_t {
 
 using Filesystem_Open = Filesystem_File_Handle (*)(void* user, const char* path, mode_t flags);
 using Filesystem_Close = void (*)(void* user, Filesystem_File_Handle fd);
-using Filesystem_Read = s32 (*)(void* user, Filesystem_File_Handle fd, void* dst, s32 bytes);
-using Filesystem_Write = s32 (*)(void* user, Filesystem_File_Handle fd, const void* src, s32 bytes);
+using Filesystem_Read = s32 (*)(void* user, Filesystem_File_Handle fd, void* dst, u32 bytes);
+using Filesystem_Write = s32 (*)(void* user, Filesystem_File_Handle fd, const void* src, u32 bytes);
 using Filesystem_Tell = s32 (*)(void* user, Filesystem_File_Handle fd);
 using Filesystem_Seek = s32 (*)(void* user, Filesystem_File_Handle fd, whence_t whence, s32 position);
 using Filesystem_Sync = s32 (*)(void* user);

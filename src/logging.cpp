@@ -94,7 +94,7 @@ void Log_LogChar(char ch) {
     }
 }
 
-static char val2digit(int v, int base) {
+static char val2digit(int v) {
     if(v > 0 && v < 10)
         return (char)(v + 0x30);
     if (v >= 10) {
@@ -112,7 +112,7 @@ static u32 itoa_noflip(char* buf, u32 bufsiz, s32 v, int base) {
         v *= -1;
     }
     do {
-        buf[i++] = val2digit(v % base, base);
+        buf[i++] = val2digit(v % base);
         v /= base;
     } while(v && i != reallimit);
     if (neg) {
@@ -128,7 +128,7 @@ static u32 itoa_noflip(char* buf, u32 bufsiz, s32 v, int base) {
 static u32 utoa_noflip(char* buf, u32 bufsiz, u32 v, int base) {
 	u32 i = 0;
 	do {
-		buf[i++] = val2digit(v % base, base);
+		buf[i++] = val2digit(v % base);
 		v /= base;
 	} while (v && i != bufsiz - 1);
 	buf[i] = '\0';

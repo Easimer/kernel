@@ -1,7 +1,7 @@
 CC=i686-elf-gcc
 CXX=i686-elf-g++
-CCFLAGS=-g -fno-omit-frame-pointer -std=gnu99 -ffreestanding -O2 -Wall -Wextra
-CXXFLAGS=-g -fno-omit-frame-pointer -std=c++17 -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
+CCFLAGS=-g -fno-omit-frame-pointer -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Werror
+CXXFLAGS=-g -fno-omit-frame-pointer -std=c++17 -ffreestanding -O2 -Wall -Wextra -Werror -fno-exceptions -fno-rtti
 
 CRTBEGIN_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtbegin.o)
 CRTEND_OBJ:=$(shell $(CC) $(CFLAGS) -print-file-name=crtend.o)

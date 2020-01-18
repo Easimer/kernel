@@ -8,7 +8,6 @@
 #define JUMP_NEXT_TAG(tag_hdr) tag_hdr = (const MB2_Tag_Header*)((u32)(NEXT_TAG_UNALIGNED(tag_hdr) + 7) & -8)
 
 static void MB2_Parse_MemMap(const MB2_Tag_Memory_Map* mm) {
-    auto entry_size = mm->entry_size;
     const MB2_Tag_Memory_Map_Entry* end = (MB2_Tag_Memory_Map_Entry*)((u8*)mm + mm->hdr.size);
 
     auto entry = (const MB2_Tag_Memory_Map_Entry*)(mm + 1);

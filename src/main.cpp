@@ -57,21 +57,6 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
         File_Close(fd);
     }
 
-    fd = File_Open(0, "/WRTEST.TXT", O_RDWR | O_CREAT);
-    if(fd != -1) {
-        u8* testdat = (u8*)kmalloc(32 * 1024);
-        for(u32 i = 0; i < 32 * 1024; i++) {
-            testdat[i] = '0' + (i & 7);
-        }
-        u32 wr;
-        wr = File_Write(testdat, 1, 32 * 1024, fd);
-        kfree(testdat);
-        File_Close(fd);
-    }
-
-    logprintf("Syncing disk\n");
-    Sync(0);
-
     logprintf("Loading COMMAND.EXE\n");
     const char* argv[] = {"/COMMAND.EXE"};
     int ret = Execute_Program(0, "/COMMAND.EXE", 1, argv);

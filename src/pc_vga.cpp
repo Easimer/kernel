@@ -106,6 +106,7 @@ static void PCVGA_PutChar(char c) {
 }
 
 static void PCVGA_WriteString(void* user, const char* string) {
+    (void)user;
     while(*string) {
         PCVGA_PutChar(*string);
         string++;
@@ -113,6 +114,7 @@ static void PCVGA_WriteString(void* user, const char* string) {
 }
 
 static void PCVGA_WriteChar(void* user, char c) {
+    (void)user;
     PCVGA_PutChar(c);
 }
 
