@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "logging.h"
 #include "simd.h"
+#include "pc_vga.h"
 
 struct Stack_Frame {
 	Stack_Frame* ebp;
@@ -23,6 +24,9 @@ void do_assert(const char* expr, s32 line, const char* file, const char* functio
     
 	logprintf("Stack trace:\n");
 	DumpStackTrace(32);
+	logprintf("=====================");
+	PCVGA_PrintNotice("!!! CRASH !!!");
+
     while(1) {
 		asm volatile("hlt");
 	}

@@ -141,3 +141,13 @@ void PCVGA_Init() {
 
     Log_Register(NULL, &gPCVGA_LogDst);
 }
+
+void PCVGA_PrintNotice(const char* notice) {
+    u32 i;
+    for(i = 0; i < VGA_WIDTH && notice[i]; i++) {
+        vga.buffer[(VGA_HEIGHT - 1) * VGA_WIDTH + i] = MAKE_CHAR(COL_RED, COL_WHITE, notice[i]); 
+    }
+    for(; i < VGA_WIDTH; i++) {
+        vga.buffer[(VGA_HEIGHT - 1) * VGA_WIDTH + i] = MAKE_CHAR(COL_RED, COL_WHITE, ' ');
+    }
+}
