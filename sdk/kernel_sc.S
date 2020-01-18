@@ -114,3 +114,17 @@ tell:
 
     popl %ebp
     ret
+
+.globl poll_kbd
+.type poll_kbd, @function
+poll_kbd:
+    pushl %ebp
+    mov %esp, %ebp
+
+    mov 8(%esp), %ecx
+    mov 12(%esp), %edx
+    mov $0x0008, %eax
+    int $0x80
+
+    popl %ebp
+    ret

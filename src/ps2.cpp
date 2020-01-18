@@ -95,6 +95,21 @@ bool PS2_ReadDataWithTimeout(u32 ticks, u8* value) {
     return ret;
 }
 
+bool PS2_ReadData(u8* value) {
+    bool ret = false;
+    u32 c = 0;
+
+    while(c < 8192 && !ret) {
+        if(CanReadData()) {
+            *value = ReadData();
+            ret = true;
+        }
+        c++;
+    }
+
+    return ret;
+}
+
 static void FlushOutputBuffer() {
     while(CanReadData()) {
         ReadData();

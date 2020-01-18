@@ -18,4 +18,7 @@
 #define SYSCALL_PRINTCH         (0x0007)
 // EDX=char
 
+#define SYSCALL_POLLKBD         (0x0008)
+// ECX=Keyboard #ID EDX=Keyboard_Event* EAX<-valid
+
 #endif /* KERNEL_SYSCALLS_H */

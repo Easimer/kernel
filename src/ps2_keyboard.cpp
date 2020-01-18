@@ -4,6 +4,7 @@
 #include "utils.h"
 #include "virtkeys.h"
 #include "interrupts.h"
+#include "syscalls.h"
 #include "ring_buffer.h"
 
 #include "logging.h"
@@ -17,6 +18,7 @@ struct PS2_Keyboard {
 };
 
 static PS2_Keyboard* gpKeyboards[2] = { NULL, NULL };
+static bool gbRegisteredSyscall = false;
 
 #define PREFIX_EXTRA (0xE0)
 #define PREFIX_RELEASE (0xF0)
@@ -133,7 +135,8 @@ static void IRQHandler(Registers* regs) {
     memset(sequence, 0, 16);
 
     while(remains > 0) {
-        if(PS2_ReadDataWithTimeout(1000, &buf)) {
+        ASSERT(remains <= 16);
+        if(PS2_ReadData(&buf)) {
             sequence[len++] = buf;
             if(buf == PREFIX_EXTRA) {
                 remains = 2;
@@ -142,33 +145,62 @@ static void IRQHandler(Registers* regs) {
             } else {
                 remains = 0;
             }
+        } else {
+            len = 0;
+            break;
         }
     }
 
-    if(MapSequenceToVK(len, sequence, &vk, &released)) {
-        // TODO: store this info somewhere
-        // TODO: keypress packet
-        Keyboard_Event ev;
-        ev.vk = (u32)vk;
-        ev.flags = kbd->flags;
-        if(released) ev.flags |= KBEV_RELEASED;
+    if(len > 0) {
+        if(MapSequenceToVK(len, sequence, &vk, &released)) {
+            // TODO: store this info somewhere
+            // TODO: keypress packet
+            Keyboard_Event ev;
+            ev.vk = (u32)vk;
+            ev.flags = kbd->flags;
+            if(released) ev.flags |= KBEV_RELEASED;
 
-        if(vk == VK_LSHIFT || vk == VK_RSHIFT) {
-            if(released) {
-                kbd->flags &= ~KBEV_SHIFT;
-            } else {
-                kbd->flags |= KBEV_SHIFT;
+            if(vk == VK_LSHIFT || vk == VK_RSHIFT) {
+                if(released) {
+                    kbd->flags &= ~KBEV_SHIFT;
+                } else {
+                    kbd->flags |= KBEV_SHIFT;
+                }
+            } else if(vk == VK_LCTRL || vk == VK_RCTRL) {
+                if(released) {
+                    kbd->flags &= ~KBEV_CTRL;
+                } else {
+                    kbd->flags |= KBEV_CTRL;
+                }
             }
-        } else if(vk == VK_LCTRL || vk == VK_RCTRL) {
-            if(released) {
-                kbd->flags &= ~KBEV_CTRL;
-            } else {
-                kbd->flags |= KBEV_CTRL;
-            }
+
+            kbd->event_buffer.push(ev);
+        } else {
         }
+    }
+}
 
-        kbd->event_buffer.push(ev);
+static void SC_PollKbd(Registers* regs) {
+    ASSERT(regs->eax == SYSCALL_POLLKBD);
+    u32 kbd = regs->ecx;
+    Keyboard_Event* dst = (Keyboard_Event*)regs->edx;
+    regs->eax = 0;
+
+    if(kbd < 2 && gpKeyboards[kbd]) {
+        auto state = gpKeyboards[kbd];
+
+        if(state->event_buffer.pop(dst)) {
+            regs->eax = 1;
+        }
     } else {
+    }
+}
+
+static void RegisterSyscall() {
+    if(!gbRegisteredSyscall) {
+        gbRegisteredSyscall = true;
+
+        RegisterSyscallHandler(SYSCALL_POLLKBD, &SC_PollKbd);
     }
 }
 
@@ -181,6 +213,7 @@ void PS2_Initialize_MF2_Keyboard(u32 dev) {
     state->dev = dev;
     state->flags = 0;
 
+    RegisterSyscall();
     Interrupts_Register_Handler(dev == 0 ? IRQ1 : IRQ12, IRQHandler);
 
     EnableScanning(state);

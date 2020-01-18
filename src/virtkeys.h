@@ -78,7 +78,7 @@ enum Virtual_Key {
     VK_INSERT,
     VK_DELETE,
     VK_PGUP,
-    VKPGDOWN,
+    VK_PGDOWN,
 
     VK_LSHIFT,
     VK_CAPSLOCK,
@@ -127,8 +127,8 @@ enum Virtual_Key {
 #define KBEV_CTRL     (0x04)
 
 struct Keyboard_Event {
-    u32 vk;
-    u32 flags;
+    unsigned long vk;
+    unsigned long flags;
 };
 
 #endif /* KERNEL_VIRTKEYS_H */
