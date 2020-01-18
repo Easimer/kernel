@@ -244,7 +244,6 @@ void File_Seek(int fd, s32 offset, whence_t whence) {
             auto& f = gaFDMap[fd];
             ASSERT(f.vol < giVolumesLastIndex);
             auto& V = gaVolumes[f.vol];
-            logprintf("user: %x\n", V.filesystem.user);
             V.filesystem.desc->Seek(V.filesystem.user, f.fd, whence, offset);
         } else {
             //logprintf("FSEEK:: free fd\n");
@@ -258,7 +257,10 @@ int File_Tell(int fd);
 void Sync(Volume_Handle volume) {
     ASSERT(volume < giVolumesLastIndex);
     auto& V = gaVolumes[volume];
-    V.filesystem.desc->Sync(V.filesystem.user);
+    if(V.filesystem.desc->Sync) {
+        logprintf("sync=%x user=%x\n", V.filesystem.desc->Sync, V.filesystem.user);
+        V.filesystem.desc->Sync(V.filesystem.user);
+    }
 }
 
 int File_EOF(int fd) {

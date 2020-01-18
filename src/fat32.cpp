@@ -167,6 +167,7 @@ static void FlushFATPage(FAT32_State* fs) {
 }
 
 static void FlushClusterCache(FAT32_State* fs) {
+    ASSERT(fs);
     u32 sector_offset;
     if(fs->cluster_cache_dirty) {
         // Write cached sector back
@@ -210,6 +211,7 @@ static inline char ToUpper(char ch) {
 
 static void LoadFATPage(FAT32_State* fs, u32 page) {
     u32 sector_offset;
+    ASSERT(fs);
     
     ASSERT(page < fs->sectors_per_fat);
 
@@ -466,9 +468,8 @@ static Virtual_Cluster_Index FindClusterOfEntryInDirectory(FAT32_State* fs, Virt
 
 static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags) {
     auto state = (FAT32_State*)user;
+    ASSERT(state);
     Filesystem_File_Handle ret = -1;
-
-    //logprintf("FS_Open: '%s'\n", path);
 
     bool path_end = false;
     u32 slash_idx = 0;
@@ -731,6 +732,7 @@ static s32 FS_Write(void* user, Filesystem_File_Handle fd, const void* src, s32 
             }
         }
     }
+
     return ret;
 }
 
@@ -803,9 +805,12 @@ static s32 FS_Seek(void* user, Filesystem_File_Handle fd, whence_t whence, s32 p
 
 static s32 FS_Sync(void* user) {
     auto state = (FAT32_State*)user;
+    ASSERT(state);
 
     FlushFATPage(state);
     FlushClusterCache(state);
+
+    return 0;
 }
 
 static int FS_EOF(void* user, Filesystem_File_Handle fd) {
