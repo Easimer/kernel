@@ -7,6 +7,7 @@
 #include "memory.h"
 #include "interrupts.h"
 #include "timer.h"
+#include "ps2.h"
 #include "pci.h"
 #include "disk.h"
 #include "volumes.h"
@@ -31,6 +32,8 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     } else {
         ASSERT(!"Didn't boot from a Multiboot2 bootloader");
     }
+
+    PS2_Setup();
 
     // Run driver registration code
     _init();
