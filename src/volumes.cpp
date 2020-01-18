@@ -143,7 +143,7 @@ static File_Handle_Mapping gaFDMap[MAX_OPEN_FILES];
 int File_Open(Volume_Handle volume, const char* path, mode_t flags) {
     int ret = -1;
 
-    logprintf("File_Open\n");
+    logprintf("File_Open(%x, %s, %x)\n", volume, path, flags);
 
     if(volume < giVolumesLastIndex && path && flags > 0) {
         int ch = -1;
