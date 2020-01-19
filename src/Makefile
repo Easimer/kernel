@@ -10,7 +10,7 @@ VERSION=0.2
 KERNEL_FILENAME=kernel-$(VERSION).img
 KERNEL_CORE_OBJECTS=boot.S.o main.cpp.o logging.cpp.o port_io.S.o multiboot2.cpp.o utils.cpp.o memory.cpp.o simd.S.o exec.cpp.o
 KERNEL_DRIVER_CORE_OBJECTS=pci.cpp.o interrupts.cpp.o interrupts.S.o disk.cpp.o volumes.cpp.o
-KERNEL_DRIVER_OBJECTS=pc_vga.cpp.o uart.cpp.o timer.cpp.o ide.cpp.o fat32.cpp.o ps2.cpp.o ps2_keyboard.cpp.o
+KERNEL_DRIVER_OBJECTS=pc_vga.cpp.o uart.cpp.o timer.cpp.o ide.cpp.o fat32.cpp.o ps2.cpp.o ps2_keyboard.cpp.o dev_fs.cpp.o
 KERNEL_OBJECTS=$(KERNEL_CORE_OBJECTS) $(KERNEL_DRIVER_CORE_OBJECTS) $(KERNEL_DRIVER_OBJECTS)
 
 all: $(KERNEL_FILENAME) boot.iso

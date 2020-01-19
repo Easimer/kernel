@@ -97,3 +97,27 @@ void memcpy(void* dst, const void* src, u32 len) {
 		len--;
 	}
 }
+
+u32 strlen(const char* s) {
+	u32 ret = 0;
+	while(*s++) ret++;
+	return ret;
+}
+
+bool strncmp(const char* lhs, const char* rhs, u32 n) {
+	for (u32 i = 0; i < n; i++) {
+		char l = lhs[i];
+		char r = rhs[i];
+		if (l != r)
+			return false;
+		if (!l)
+			break;
+	}
+	return true;
+}
+
+bool strcmp(const char* lhs, const char* rhs) {
+	while (*lhs && (*lhs == *rhs))
+		lhs++, rhs++;
+	return *lhs == *rhs;
+}

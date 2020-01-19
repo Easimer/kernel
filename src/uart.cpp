@@ -33,19 +33,22 @@ static void PutChar(u16 addr, char ch) {
     outb(addr, ch);
 }
 
+static void Flush(UART_State* state) {
+    u8* buf = state->buffer;
+    for(int i = 0; i < state->buffer_count; i++) {
+        PutChar(state->addr, *buf);
+        buf++;
+    }
+    state->buffer_count = 0;
+}
+
 static void WriteChar(UART_State* state, char ch) {
-    auto addr = state->addr;
     // Place char into buffer
     state->buffer[state->buffer_count++] = ch;
 
     // Flush when full or newline
     if(state->buffer_count == BUFFER_SIZE || ch == '\n') {
-        u8* buf = state->buffer;
-        for(int i = 0; i < state->buffer_count; i++) {
-            PutChar(addr, *buf);
-            buf++;
-        }
-        state->buffer_count = 0;
+        Flush(state);
     }
 }
 
@@ -62,6 +65,20 @@ static void UART_WriteChar(void* user, char ch) {
     auto state = (UART_State*)user;
 
     WriteChar(state, ch);
+}
+
+void UART_PutChar(int port, char ch) {
+    if(port >= 0 && port < 4) {
+        auto user = &gPorts[port];
+        UART_WriteChar(user, ch);
+    }
+}
+
+void UART_Flush(int port) {
+    if(port >= 0 && port < 4) {
+        auto user = &gPorts[port];
+        Flush(user);
+    }
 }
 
 static Log_Destination gLogDst = {

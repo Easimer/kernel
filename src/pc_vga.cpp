@@ -74,7 +74,7 @@ static void PCVGA_ScrollBack() {
     }
 }
 
-static void PCVGA_PutChar(char c) {
+void PCVGA_PutChar(char c) {
     if(c != '\n' && c != '\t') {
         vga.buffer[vga.row * VGA_WIDTH + vga.column] = MAKE_CHAR(COL_BLACK, COL_LIGHT_GREY, c);
         vga.column++;

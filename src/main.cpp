@@ -47,22 +47,9 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     // Initialize volume manager
     Volume_Init();
 
-    auto fd = File_Open(0, "/LOREM.TXT", O_RDONLY);
-    if(fd != -1) {
-        u8 buf[33];
-        while(!File_EOF(fd)) {
-            auto rd = File_Read(buf, 1, 32, fd);
-            if(rd != -1) {
-                buf[rd] = 0;
-                logprintf((char*)buf);
-            }
-        }
-        File_Close(fd);
-    }
-
     logprintf("Loading COMMAND.EXE\n");
     const char* argv[] = {"/COMMAND.EXE"};
-    int ret = Execute_Program(0, "/COMMAND.EXE", 1, argv);
+    int ret = Execute_Program(1, "/COMMAND.EXE", 1, argv);
     logprintf("COMMAND.EXE returned with code %d\n", ret);
 
     while(1) {

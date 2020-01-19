@@ -844,11 +844,11 @@ static bool IsWriteProtected(FAT32_State* fs) {
                 Volume_Write_Blocks(fs->vol, fat_old, fs->sector_fat0, 1);
             }
         } else {
-            logprintf("Couldn't write volume %d, assuming write protection\n", fs->vol);
+            logprintf("FAT32: Couldn't write volume %d, assuming write protection\n", fs->vol);
             ret = true;
         }
     } else {
-        logprintf("Write protection check failed on volume %d\n", fs->vol);
+        logprintf("FAT32: Write protection check failed on volume %d\n", fs->vol);
     }
 
     return ret;
@@ -939,10 +939,10 @@ static bool FS_Probe(Volume_Handle handle, void** user) {
                 }
             }
         } else {
-            //logprintf("\tFailed to read the information sector\n");
+            logprintf("FAT32: Failed to read the information sector\n");
         }
     } else {
-        //logprintf("\tFailed to read sector 0\n");
+        logprintf("FAT32: Failed to read sector 0\n");
     }
 
     return ret;

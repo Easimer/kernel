@@ -17,6 +17,7 @@ struct Filesystem {
 struct Volume_State {
     Volume_Descriptor desc;
     Filesystem filesystem;
+    bool virt;
 };
 
 static Volume_State gaVolumes[MAX_VOLUMES];
@@ -32,6 +33,7 @@ Volume_Handle Volume_Register(const Volume_Descriptor* vol) {
     S.desc = *vol;
     S.filesystem.desc = NULL;
     S.filesystem.user = NULL;
+    S.virt = false;
     ret = giVolumesLastIndex;
 
     logprintf("New volume registered: disk %d start %x size %x\n", vol->disk, vol->offset, vol->length);
@@ -58,12 +60,14 @@ s32 Volume_Read_Blocks(Volume_Handle vol, void* buffer, u32 offset, u32 count) {
         if(count > 0) {
             auto& V = gaVolumes[vol];
             auto disk = V.desc.disk;
-            if(offset < V.desc.length && offset + count < V.desc.length) {
-                ret = Disk_Read_Blocks(disk, buffer, count, offset + V.desc.offset);
-            } else {
-                logprintf("VolMan: read out of range: %x + 0:%x\n", offset, count);
+            if(!V.virt) {
+                if(offset < V.desc.length && offset + count < V.desc.length) {
+                    ret = Disk_Read_Blocks(disk, buffer, count, offset + V.desc.offset);
+                } else {
+                    logprintf("VolMan: read out of range: %x + 0:%x\n", offset, count);
+                }
+                ASSERT(offset < V.desc.length && offset + count < V.desc.length);
             }
-            ASSERT(offset < V.desc.length && offset + count < V.desc.length);
         } else {
             ret = 0;
         }
@@ -83,12 +87,14 @@ s32 Volume_Write_Blocks(Volume_Handle vol, const void* buffer, u32 offset, u32 c
             auto& V = gaVolumes[vol];
             auto disk = V.desc.disk;
             
-            if(offset < V.desc.length && offset + count < V.desc.length) {
-                ret = Disk_Write_Blocks(disk, buffer, count, offset + V.desc.offset);
-            } else {
-                logprintf("VolMan: writing out of range: %x + 0:%x\n", offset, count);
+            if(!V.virt) {
+                if(offset < V.desc.length && offset + count < V.desc.length) {
+                    ret = Disk_Write_Blocks(disk, buffer, count, offset + V.desc.offset);
+                } else {
+                    logprintf("VolMan: writing out of range: %x + 0:%x\n", offset, count);
+                }
+                ASSERT(offset < V.desc.length && offset + count < V.desc.length);
             }
-            ASSERT(offset < V.desc.length && offset + count < V.desc.length);
         } else {
             ret = 0;
         }
@@ -323,7 +329,22 @@ static void SC_Handler(Registers* regs) {
     regs->eax = res;
 }
 
+static void ReserveSpecialVolume() {
+    ASSERT(giVolumesLastIndex < MAX_VOLUMES);
+    auto vol = giVolumesLastIndex;
+
+    gaVolumes[vol].desc.disk = -1;
+    gaVolumes[vol].desc.length = 0;
+    gaVolumes[vol].desc.offset = 0;
+    gaVolumes[vol].virt = true;
+
+    giVolumesLastIndex++;
+}
+
 void Volume_Init() {
+    // Register special volume #0
+    ReserveSpecialVolume();
+
     // Detect filesystems
     Volume_Detect_Filesystems();
 

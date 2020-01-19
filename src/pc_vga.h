@@ -4,5 +4,6 @@
 void PCVGA_Init();
 
 void PCVGA_PrintNotice(const char* notice);
+void PCVGA_PutChar(char c);
 
 #endif
