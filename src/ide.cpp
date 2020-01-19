@@ -479,13 +479,19 @@ static bool IDE_Initialize_Controller(const PCI_Device* dev, IDE_Controller* ctr
         logprintf("IDE BAR%d=%x\n", i, bar[i]);
     }
 
+    u8 bar0 = bar[0] & 0xFFFFFFFC;
+    u8 bar1 = bar[1] & 0xFFFFFFFC;
+    u8 bar2 = bar[2] & 0xFFFFFFFC;
+    u8 bar3 = bar[3] & 0xFFFFFFFC;
+    u8 bar4 = bar[4] & 0xFFFFFFFC;
+
     // Determine IO ports
-    ctrl->channels[ATA_PRIMARY].base = (bar[0] & 0xFFFFFFFC)    + 0x1F0 * (!bar[0]);
-    ctrl->channels[ATA_PRIMARY].ctrl = (bar[1] & 0xFFFFFFFC)    + 0x3F6 * (!bar[1]);
-    ctrl->channels[ATA_SECONDARY].base = (bar[2] & 0xFFFFFFFC)  + 0x170 * (!bar[2]);
-    ctrl->channels[ATA_SECONDARY].ctrl = (bar[3] & 0xFFFFFFFC)  + 0x376 * (!bar[3]);
-    ctrl->channels[ATA_PRIMARY].bmide = (bar[4] & 0xFFFFFFFC) + 0;
-    ctrl->channels[ATA_SECONDARY].bmide = (bar[4] & 0xFFFFFFFC) + 8;
+    ctrl->channels[ATA_PRIMARY].base = bar0    + 0x1F0 * (!bar0);
+    ctrl->channels[ATA_PRIMARY].ctrl = bar1    + 0x3F6 * (!bar1);
+    ctrl->channels[ATA_SECONDARY].base = bar2  + 0x170 * (!bar2);
+    ctrl->channels[ATA_SECONDARY].ctrl = bar3  + 0x376 * (!bar3);
+    ctrl->channels[ATA_PRIMARY].bmide = bar4 + 0;
+    ctrl->channels[ATA_SECONDARY].bmide = bar4 + 8;
 
     logprintf("IDE PRIM Base=%x Ctrl=%x\n", ctrl->channels[ATA_PRIMARY].base, ctrl->channels[ATA_PRIMARY].ctrl);
 
