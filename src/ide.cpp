@@ -402,6 +402,7 @@ static bool IDE_Disk_Read(void* user, u32* blocks_read, void* buf, u32 block_cou
                 }
             } else {
                 logprintf("IDE: read offset is out of bounds!\n");
+                ASSERT(0);
             }
         } else {
             logprintf("IDE: code requested null read!\n");
@@ -567,9 +568,12 @@ static bool IDE_Initialize_Controller(const PCI_Device* dev, IDE_Controller* ctr
             }
             D.model[40] = 0;
 
-            if(!Disk_Register_Device(&D, &gDiskDesc)) {
-                logprintf("PCI IDE: couldn't register disk\n");
-                ret = false;
+            // don't register zero len drives
+            if(D.size > 0) {
+                if(!Disk_Register_Device(&D, &gDiskDesc)) {
+                    logprintf("PCI IDE: couldn't register disk\n");
+                    ret = false;
+                }
             }
 
             count++;

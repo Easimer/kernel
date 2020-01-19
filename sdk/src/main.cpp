@@ -58,17 +58,18 @@ static void ReadCommand(char* buffer, int buffer_siz) {
 
 int main(int argc, char** argv) {
     int rc = 0;
-    bool exit = false;
-    char cmdbuf[64];
+    Keyboard_Event ev;
+    char ch;
+    bool over = false;
 
-    while(!exit) {
-        print("> ");
-        ReadCommand(cmdbuf, 64);
-
-        print("Command: ");
-        print(cmdbuf);
-        print("\n");
-    }
+    print("Test program\nPress 'Q' to exit!\n");
+    do {
+        if(poll_kbd(0, &ev)) {
+            if(TranslateVK(&ch, ev) && ch == 'q') {
+                over = true;
+            }
+        }
+    } while(!over);
 
     return rc;
 }

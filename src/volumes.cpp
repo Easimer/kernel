@@ -21,7 +21,7 @@ struct Volume_State {
 };
 
 static Volume_State gaVolumes[MAX_VOLUMES];
-static u32 giVolumesLastIndex = 0;
+static u32 giVolumesLastIndex = 1; // vol #0 is reserved, see below
 static Filesystem_Descriptor* gaFilesystems[MAX_FILESYSTEMS];
 static u32 giFilesystemsLastIndex = 0;
 
@@ -36,7 +36,7 @@ Volume_Handle Volume_Register(const Volume_Descriptor* vol) {
     S.virt = false;
     ret = giVolumesLastIndex;
 
-    logprintf("New volume registered: disk %d start %x size %x\n", vol->disk, vol->offset, vol->length);
+    logprintf("VolMan: New volume registered: disk %d start %x size %x\n", vol->disk, vol->offset, vol->length);
 
     giVolumesLastIndex++;
 
@@ -116,13 +116,13 @@ static void Volume_Detect_Filesystems() {
                     V.filesystem.desc = FS;
                     V.filesystem.user = user;
                     OK = true;
-                    logprintf("Mounting volume #%d as '%s'!\n", vol, FS->Name);
+                    logprintf("VolMan: mounting volume #%d as '%s'!\n", vol, FS->Name);
                 }
             }
         }
 
         if(!OK) {
-            logprintf("Couldn't find filesystem driver for volume %d\n", vol);
+            logprintf("VolMan: couldn't find filesystem driver for volume %d\n", vol);
         }
     }
 }
@@ -283,7 +283,6 @@ void Sync(Volume_Handle volume) {
     ASSERT(volume < giVolumesLastIndex);
     auto& V = gaVolumes[volume];
     if(V.filesystem.desc->Sync) {
-        logprintf("sync=%x user=%x\n", V.filesystem.desc->Sync, V.filesystem.user);
         V.filesystem.desc->Sync(V.filesystem.user);
     }
 }
@@ -330,21 +329,18 @@ static void SC_Handler(Registers* regs) {
 }
 
 static void ReserveSpecialVolume() {
-    ASSERT(giVolumesLastIndex < MAX_VOLUMES);
-    auto vol = giVolumesLastIndex;
-
-    gaVolumes[vol].desc.disk = -1;
-    gaVolumes[vol].desc.length = 0;
-    gaVolumes[vol].desc.offset = 0;
-    gaVolumes[vol].virt = true;
-
-    giVolumesLastIndex++;
+    gaVolumes[0].desc.disk = -1;
+    gaVolumes[0].desc.length = 0;
+    gaVolumes[0].desc.offset = 0;
+    gaVolumes[0].virt = true;
 }
 
 void Volume_Init() {
-    // Register special volume #0
+    logprintf("VolMan: initializing\n");
+    // Register special volume
     ReserveSpecialVolume();
 
+    logprintf("VolMan: detecting filesystems\n");
     // Detect filesystems
     Volume_Detect_Filesystems();
 
@@ -355,4 +351,5 @@ void Volume_Init() {
     RegisterSyscallHandler(SYSCALL_WRITE, SC_Handler);
     RegisterSyscallHandler(SYSCALL_SEEK, SC_Handler);
     RegisterSyscallHandler(SYSCALL_TELL, SC_Handler);
+    logprintf("VolMan: ready\n");
 }

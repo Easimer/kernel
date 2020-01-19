@@ -864,7 +864,7 @@ static bool FS_Probe(Volume_Handle handle, void** user) {
 
     //logprintf("Testing volume #%d for FAT32 presence\n", handle);
 
-    if(Volume_Read_Blocks(handle, buf_bootsect, 0, 1)) {
+    if(Volume_Read_Blocks(handle, buf_bootsect, 0, 1) > 0) {
         u8 buf_oem[9];
         memcpy(buf_oem, bootsect->oem, 8);
         buf_oem[8] = 0;
@@ -872,7 +872,7 @@ static bool FS_Probe(Volume_Handle handle, void** user) {
         //logprintf("\tSector size: %d\n\tSectors per cluster: %d\n\tCount of FATs: %d\n\tTotal sectors: %d (%d)\n\tSectors per FAT: %d\n\tInfosector: %x\n",
             //bootsect->sector_size, bootsect->sectors_per_cluster, bootsect->count_fat, bootsect->total_sectors, bootsect->total_sectors32, bootsect->sectors_per_fat32, bootsect->sector_infosector);
         
-        if(Volume_Read_Blocks(handle, buf_infosect, bootsect->sector_infosector, 1)) {
+        if(Volume_Read_Blocks(handle, buf_infosect, bootsect->sector_infosector, 1) > 0) {
             //logprintf("\tInfosector is present:\n");
             //logprintf("\t\tSignature: %x\n\t\tSignature 2: %x\n\t\tFree clusters: %x\n",
             //infosect->signature, infosect->sector_signature, infosect->free_data_clusters);
@@ -883,7 +883,7 @@ static bool FS_Probe(Volume_Handle handle, void** user) {
             bool is_signature = infosect->signature == 0x41615252 && infosect->sector_signature == 0x61417272;
             bool version_ok = bootsect->version == 0x0000;
 
-            if(Volume_Read_Blocks(handle, buf_fat, bootsect->count_reserved, 1)) {
+            if(Volume_Read_Blocks(handle, buf_fat, bootsect->count_reserved, 1) > 0) {
                 u32* fat = (u32*)buf_fat;
                 u32 cluster0 = fat[0];
                 u32 cluster0eoc = fat[1];

@@ -54,7 +54,7 @@ static void memcpyu(void* dst, const void* src, u32 len) {
 	u64* d64 = (u64*)dst;
 	const u64* s64 = (const u64*)src;
 	while (len >= 16) {
-        _mm_storeu_si128((__m128i*)d64, _mm_loadu_si128((__m128i const*)s64));
+        _mm_storeu_ps((float*)d64, _mm_loadu_ps((float const*)s64));
         d64++; s64++;
         d64++; s64++;
         len -= 16;
@@ -84,7 +84,7 @@ void memcpy(void* dst, const void* src, u32 len) {
 	u64* d64 = (u64*)dst;
 	const u64* s64 = (const u64*)src;
 	while (len >= 16) {
-        _mm_store_si128((__m128i*)d64, _mm_load_si128((__m128i const*)s64));
+        _mm_store_ps((float*)d64, _mm_load_ps((float const*)s64));
         d64++; s64++;
         d64++; s64++;
         len -= 16;
