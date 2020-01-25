@@ -18,6 +18,7 @@ int Execute_Program(Volume_Handle volume, const char* path, int argc, const char
                 auto program = (void*)EXEC_START;
                 File_Seek(fd, 0, whence_t::SET);
                 rd = File_Read(program, 1, EXEC_MAX_SIZE, fd);
+                logprintf("Loaded COMMAND.EXE, entering\n");
                 ret = ((Entry_Point)hdr.addr_entry)(argc, argv);
             } else {
                 ret = EXEC_ERR_NOTANEXE;

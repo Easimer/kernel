@@ -186,8 +186,8 @@ static u8* LoadCluster(FAT32_State* fs, Virtual_Cluster_Index cluster_idx) {
         // Load new cluster
         //sector_offset = fs->sector_offset_data_region + (cluster_idx - 2) * fs->sectors_per_cluster;
         sector_offset = fs->sector_offset_data_region + clsvtop(cluster_idx) * fs->sectors_per_cluster;
-        //logprintf("Cluster Idx: %x Sectors per cluster: %d Data offset: %x -> Sector offset: %x\n", cluster_idx, fs->sectors_per_cluster, fs->sector_offset_data_region, sector_offset);
-        //logprintf("FAT32: loading cluster #%d (sector=%x) into cache\n", cluster_idx, sector_offset);
+        logprintf("Cluster Idx: %x Sectors per cluster: %d Data offset: %x -> Sector offset: %x\n", cluster_idx, fs->sectors_per_cluster, fs->sector_offset_data_region, sector_offset);
+        logprintf("FAT32: loading cluster #%d (sector=%x) into cache\n", cluster_idx, sector_offset);
         Volume_Read_Blocks(fs->vol, fs->cluster_cache, sector_offset, fs->sectors_per_cluster);
         fs->cluster_cache_index = Virtual_Cluster_Index(cluster_idx);
     }
@@ -377,10 +377,12 @@ static Virtual_Cluster_Index FindClusterOfEntryInDirectory(FAT32_State* fs, Virt
     ASSERT(fs);
     ASSERT(path);
     bool found = false;
+    u32 counter = 0;
 
     const auto entries_per_cluster = (fs->sectors_per_cluster * 512) / 32;
     // TODO: range check cluster_dir
     while(!found && (cluster_dir & 0xFFFFFFF0) != 0x0FFFFFF0) {
+        logprintf("Loading cluster %x\n", cluster_dir);
         auto dir = LoadCluster(fs, cluster_dir);
 
         Dirent* entries = (Dirent*)dir;
@@ -388,6 +390,14 @@ static Virtual_Cluster_Index FindClusterOfEntryInDirectory(FAT32_State* fs, Virt
             auto& ent = entries[i];
             u8 buf[16];
             int c = 7;
+            counter++;
+
+            if(counter == 65536) {
+                // Directory is too big
+                // TODO: this is a workaround
+                ret = 0;
+                return ret;
+            }
 
             if(ent.filename[0] == 0x00) {
                 // End-of-directory
@@ -453,6 +463,7 @@ static Virtual_Cluster_Index FindClusterOfEntryInDirectory(FAT32_State* fs, Virt
         // Get next cluster
         cluster_dir = GetFATEntry(fs, cluster_dir);
     }
+    logprintf("End of directory\n");
 
     return ret;
 }
@@ -492,6 +503,8 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
 
             is_subdirectory = (dent.attr & DEA_Subdirectory) != 0;
             bool end_of_path = P[slash_idx] == '\0';
+
+            logprintf("dirent_cluster=%x\n", dirent_cluster);
 
             if(dirent_cluster != 0) {
                 u32 dent_cluster = (((u32)dent.cluster_hi) << 16) | (u32)dent.cluster_lo;
@@ -551,8 +564,9 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
             }
 
             state->free_file_handles -= 1;
+            logprintf("found file\n");
         } else {
-            //logprintf("'%d:%s': file not found\n", state->vol, path);
+            logprintf("'%d:%s': file not found\n", state->vol, path);
         }
     } else {
         //logprintf("'%d:%s': can't open file: out of file handles\n", state->vol, path);
@@ -898,6 +912,10 @@ static bool FS_Probe(Volume_Handle handle, void** user) {
                 if(ret) {
                     auto state = (FAT32_State*)kmalloc(sizeof(FAT32_State));
                     ASSERT(state);
+                    auto sector_size = bootsect->sector_size;
+                    if(sector_size != 512) {
+                        logprintf("Sector size is %d\n", sector_size);
+                    }
                     state->vol = handle;
                     state->sectors_per_cluster = bootsect->sectors_per_cluster;
                     state->sector_fat0 = bootsect->count_reserved;
@@ -926,8 +944,10 @@ static bool FS_Probe(Volume_Handle handle, void** user) {
                     state->fat_cache_index = 0;
 
                     // Allocate cluster cache
-                    state->cluster_cache = (u8*)kmalloc(state->sectors_per_cluster * 512);
+                    state->cluster_cache = (u8*)kmalloc(state->sectors_per_cluster * sector_size);
                     // Put cluster 0 into cache
+                    state->cluster_cache_dirty = false;
+                    state->cluster_cache_index = 0;
                     LoadCluster(state, Virtual_Cluster_Index(0));
 
                     if(IsWriteProtected(state)) {

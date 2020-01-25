@@ -91,7 +91,7 @@ s32 Volume_Write_Blocks(Volume_Handle vol, const void* buffer, u32 offset, u32 c
                 if(offset < V.desc.length && offset + count < V.desc.length) {
                     ret = Disk_Write_Blocks(disk, buffer, count, offset + V.desc.offset);
                 } else {
-                    logprintf("VolMan: writing out of range: %x + 0:%x\n", offset, count);
+                    logprintf("VolMan: writing out of range: off=%x cnt=%x (base=%x len=%x)\n", offset, count, V.desc.offset, V.desc.length);
                 }
                 ASSERT(offset < V.desc.length && offset + count < V.desc.length);
             }
