@@ -125,7 +125,8 @@ static Log_Destination gPCVGA_LogDst = {
 
 void PCVGA_Init() {
     vga.row = vga.column = 0;
-    vga.buffer = (u16*)0xB8000;
+    //vga.buffer = (u16*)0xB8000;
+    vga.buffer = (u16*)0xC03FF000;
 
     // Clear screen
     for(u32 y = 0; y < VGA_HEIGHT; y++) {
