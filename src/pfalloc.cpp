@@ -251,7 +251,11 @@ void PFA_PostInit() {
 u32 PFA_Alloc(u32 program_id, u32 size) {
     u32 ret = NULL;
 
+    ASSERT(size > 0);
+
     if(size > 0) {
+        ASSERT((size & 4095) == 0);
+        
         Memory_Region region;
         Memory_Region* candidate = NULL;
         auto cur = gMemoryRegions;
@@ -273,6 +277,8 @@ u32 PFA_Alloc(u32 program_id, u32 size) {
 
         ret = region.addr_first;
     }
+
+    PFA_DebugPrint();
 
     return ret;
 }

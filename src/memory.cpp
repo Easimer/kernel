@@ -125,8 +125,10 @@ void* kmalloc(u32 size) {
     ASSERT(size > 0);
 
     if(size > 0) {
-        logprintf("Allocating %d bytes\n", size);
-        u32 phys = PFA_Alloc(size);
+        auto round_size = (size + 4096) & 0xFFFFF000;
+        logprintf("Allocating memory for %d bytes (real size will be %d)\n", size, round_size);
+
+        u32 phys = PFA_Alloc(round_size);
         ret = MM_VirtualMapKernel(phys);
         if(ret == NULL) {
             PFA_Free(phys);
