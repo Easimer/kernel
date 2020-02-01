@@ -220,6 +220,23 @@ static void GeneralProtectionFault(Registers* regs) {
     }
 }
 
+static void PageFault(Registers* regs) {
+    u32 addr;
+    asm volatile("movl %%cr2, %0" : "=r"(addr) :); // fetch the address that we tried to access
+    logprintf("======================\n");
+    logprintf("PAGE FAULT\n");
+    logprintf("EAX: %x EBX: %x ECX: %x EDX: %x\n", regs->eax, regs->ebx, regs->ecx, regs->edx);
+    logprintf("ESI: %x EDI: %x EBP: %x ESP: %x\n", regs->esi, regs->edi, regs->ebp, regs->esp);
+    logprintf("EIP: %x CS: %x EFLAGS: %x SS: %x\n", regs->eip, regs->cs, regs->eflags, regs->ss);
+    logprintf("ADDRESS: %x\n", addr);
+    logprintf("======================\n");
+
+    while(1) {
+        asm volatile("hlt");
+    }
+    // TODO: check if we were in kernel or user mode when we implement user mode
+}
+
 struct Syscall_Handler {
     u32 id;
     void(*func)(Registers* regs);
@@ -256,7 +273,7 @@ void Interrupts_Setup() {
     IDT_Setup();
 
     handlers[13] = GeneralProtectionFault;
-    handlers[14] = GeneralProtectionFault;
+    handlers[14] = PageFault;
     handlers[0x80] = SyscallHandler;
 
     asm volatile("sti");

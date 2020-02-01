@@ -2,6 +2,8 @@
 #include "utils.h"
 #include "memory.h"
 #include "logging.h"
+#include "pfalloc.h"
+#include "vm.h"
 
 #define KERNEL_RESERVED (8 * 1024 * 1024)
 
@@ -115,4 +117,25 @@ void* AllocatePage() {
 
 void DeallocatePage(void* addr) {
 	(void)addr;
+}
+
+void* kmalloc(u32 size) {
+    void* ret = NULL;
+
+    ASSERT(size > 0);
+
+    if(size > 0) {
+        logprintf("Allocating %d bytes\n", size);
+        u32 phys = PFA_Alloc(size);
+        ret = MM_VirtualMapKernel(phys);
+        if(ret == NULL) {
+            PFA_Free(phys);
+        }
+    }
+
+    return ret;
+}
+
+void kfree(void* addr) {
+    (void)addr;
 }

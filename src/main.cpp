@@ -38,8 +38,6 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
         ASSERT(!"Didn't boot from a Multiboot2 bootloader");
     }
 
-    ASSERT(!"HALT");
-
     PS2_Setup();
 
     // Run driver registration code

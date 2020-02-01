@@ -9,7 +9,7 @@ void Mem_Init(void* base, u32 length);
 void* pmalloc(int pool, u32 size);
 void pfree(int pool, void* addr);
 
-#define kmalloc(size) pmalloc(MEM_POOL_KERNEL, size)
-#define kfree(addr) pfree(MEM_POOL_KERNEL, addr)
+void* kmalloc(u32 size);
+void kfree(void* addr);
 
 #endif /* KERNEL_MEMORY_H */

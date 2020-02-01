@@ -248,8 +248,8 @@ void PFA_PostInit() {
     PFA_DebugPrint();
 }
 
-void* PFA_Alloc(u32 program_id, u32 size) {
-    void* ret = NULL;
+u32 PFA_Alloc(u32 program_id, u32 size) {
+    u32 ret = NULL;
 
     if(size > 0) {
         Memory_Region region;
@@ -271,17 +271,17 @@ void* PFA_Alloc(u32 program_id, u32 size) {
         region.type = program_id == 0 ? MRT_Kernel : MRT_Program;
         InsertRegion(region);
 
-        ret = (void*)region.addr_first;
+        ret = region.addr_first;
     }
 
     return ret;
 }
 
-void* PFA_Alloc(u32 size) {
+u32 PFA_Alloc(u32 size) {
     return PFA_Alloc(0, size);
 }
 
-void PFA_Free(void* addr) {
+void PFA_Free(u32 addr) {
     u32 addr_u32 = (u32)addr;
     auto cur = gMemoryRegions;
 

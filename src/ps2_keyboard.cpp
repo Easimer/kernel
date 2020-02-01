@@ -208,6 +208,7 @@ void PS2_Initialize_MF2_Keyboard(u32 dev) {
     ASSERT(dev < 2);
     ASSERT(gpKeyboards[dev] == NULL);
     PS2_Keyboard* state = (PS2_Keyboard*)kmalloc(sizeof(PS2_Keyboard));
+    memset(state, 0, sizeof(PS2_Keyboard));
     gpKeyboards[dev] = state;
 
     state->dev = dev;
