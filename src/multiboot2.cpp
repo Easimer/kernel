@@ -2,7 +2,7 @@
 #include "utils.h"
 #include "multiboot2.h"
 #include "logging.h"
-#include "memory.h"
+#include "vm.h"
 #include "pfalloc.h"
 
 #define NEXT_TAG_UNALIGNED(tag_hdr) (((u8*)(tag_hdr)) + tag_hdr->size)
@@ -72,6 +72,8 @@ void MB2_Parse(const MB2_Header* hdr) {
             break;
         }
     }
+
+    MM_VirtualUnmap((void*)0xC03FD000);
 
     //logprintf("Parsing Multiboot2 info ended\n");
 }

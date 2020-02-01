@@ -12,12 +12,4 @@ void pfree(int pool, void* addr);
 #define kmalloc(size) pmalloc(MEM_POOL_KERNEL, size)
 #define kfree(addr) pfree(MEM_POOL_KERNEL, addr)
 
-void AddPhysicalMemoryRegion(void* base, u32 length);
-void* AllocatePage();
-void DeallocatePage(void* addr);
-
-bool SwitchPageDirectory(u32 pdt);
-bool MM_VirtualMap(void* vaddr, u32 physical);
-bool MM_VirtualUnmap(void* vaddr);
-
 #endif /* KERNEL_MEMORY_H */

@@ -1,6 +1,7 @@
 #include "common.h"
 #include "pfalloc.h"
 #include "utils.h"
+#include "logging.h"
 
 enum Memory_Region_Type {
     MRT_Unused = 0,
@@ -12,10 +13,15 @@ enum Memory_Region_Type {
 };
 
 struct Memory_Region {
-    constexpr Memory_Region() : type(MRT_Unused), addr_first(0), addr_last(0), prev(NULL), next(NULL) {}
+    constexpr Memory_Region() : type(MRT_Unused), addr_first(0), addr_last(0), prev(NULL), next(NULL), program_id(0) {}
     Memory_Region_Type type;
     u32 addr_first, addr_last;
     Memory_Region *prev, *next;
+    u32 program_id;
+
+    inline u32 size() const noexcept {
+        return addr_last - addr_first + 1;
+    }
 };
 
 #define MEMORY_REGIONS_MAX (256)
@@ -48,10 +54,11 @@ static void InsertRegion(const Memory_Region& region) {
     ASSERT(gMemoryRegions);
 
     while(cur) {
-        bool contains_head = cur->addr_first <= region.addr_first;
-        bool contains_tail = cur->addr_last >= region.addr_last;
+        bool contains_head = cur->addr_first <= region.addr_first && region.addr_first < cur->addr_last;
+        //bool contains_tail = cur->addr_last >= region.addr_last;
+        bool contains_tail = cur->addr_first < region.addr_last && region.addr_last <= cur->addr_last;
 
-        //ASSERT((contains_head && contains_tail) || (!contains_head && !contains_tail));
+        ASSERT((contains_head && contains_tail) || (!contains_head && !contains_tail));
 
         if(contains_head && contains_tail) {
             bool first_addr_overlapped = cur->addr_first == region.addr_first;
@@ -150,6 +157,38 @@ static void InsertRegion(const Memory_Region& region) {
     ASSERT(inserted);
 }
 
+static void TryMergingFreeRegions(Memory_Region* region) {
+    ASSERT(region->type == MRT_Free);
+    if(region->prev && region->prev->type == MRT_Free) {
+        auto prev = region->prev;
+        prev->addr_last = region->addr_last;
+        region->type = MRT_Unused;
+        prev->next = region->next;
+        if(region->next) {
+            region->next->prev = prev;
+        }
+        region->prev = region->next = NULL;
+        // Recurse
+        TryMergingFreeRegions(prev);
+    } else if(region->next && region->next->type == MRT_Free) {
+        auto next = region->next;
+        next->addr_first = region->addr_first;
+        region->type = MRT_Unused;
+        next->prev = region->prev;
+        if(region->prev) {
+            region->prev->next = next;
+        }
+        region->prev = region->next = NULL;
+        // Recurse
+        TryMergingFreeRegions(next);
+    }
+}
+
+static void RemoveRegion(Memory_Region* region) {
+    region->type = MRT_Free;
+    TryMergingFreeRegions(region);
+}
+
 void PFA_Init_InsertFree(u32 addr, u32 len) {
     Memory_Region region;
 
@@ -182,6 +221,15 @@ void PFA_Init(u32 last_physical_address) {
     gMemoryRegionsLast = &gMemoryRegionPool[0];
 }
 
+static void PFA_DebugPrint() {
+    auto cur = gMemoryRegions;
+    logprintf("Memory regions:\n");
+    while(cur) {
+        logprintf("\t(%d) %x -> %x\n", cur->type, cur->addr_first, cur->addr_last);
+        cur = cur->next;
+    }
+}
+
 void PFA_PostInit() {
     // Called after the memory regions has been mapped
     // Insert region containing the kernel image
@@ -196,9 +244,55 @@ void PFA_PostInit() {
     kernel_image.addr_first = 0xB8000;
     kernel_image.addr_last = 0xB8FFF;
     InsertRegion(kernel_image);
+
+    PFA_DebugPrint();
 }
 
-void* PFA_Alloc(u32 program_id, u32 size);
-void* PFA_AllocKernel(u32 size);
-void PFA_Free(void* addr);
+void* PFA_Alloc(u32 program_id, u32 size) {
+    void* ret = NULL;
+
+    if(size > 0) {
+        Memory_Region region;
+        Memory_Region* candidate = NULL;
+        auto cur = gMemoryRegions;
+        while(cur) {
+            auto cur_size = cur->size();
+            if(cur->type == MRT_Free && cur_size >= size) {
+                if(!candidate || candidate->size() < cur->size()) {
+                    candidate = cur;
+                }
+            }
+            cur = cur->next;
+        }
+
+        region.addr_first = candidate->addr_first;
+        region.addr_last = region.addr_first + size - 1;
+        region.program_id = program_id;
+        region.type = program_id == 0 ? MRT_Kernel : MRT_Program;
+        InsertRegion(region);
+
+        ret = (void*)region.addr_first;
+    }
+
+    return ret;
+}
+
+void* PFA_Alloc(u32 size) {
+    return PFA_Alloc(0, size);
+}
+
+void PFA_Free(void* addr) {
+    u32 addr_u32 = (u32)addr;
+    auto cur = gMemoryRegions;
+
+    while(cur) {
+        if(cur->addr_first == addr_u32) {
+            ASSERT(cur->type != MRT_Free);
+            RemoveRegion(cur);
+            break;
+        }
+        cur = cur->next;
+    }
+}
+
 void PFA_FreeAll(u32 program_id);

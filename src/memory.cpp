@@ -116,23 +116,3 @@ void* AllocatePage() {
 void DeallocatePage(void* addr) {
 	(void)addr;
 }
-
-/*
-bool SwitchPageDirectory(u32 pdt) {
-    bool ret = false;
-
-
-
-    return ret;
-}
-
-bool MapPhysicalAddress(void* vaddr, u32 physical) {
-    bool ret = false;
-    u32 pdi = (u32)vaddr >> 22;
-    u32 pti = ((u32)vaddr >> 12) & 0x3FF;
-
-    giCurrentPageDirectory[pdi];
-
-    return ret;
-}
-*/
