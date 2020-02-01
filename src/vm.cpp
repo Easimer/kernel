@@ -1,0 +1,91 @@
+#include "common.h"
+#include "utils.h"
+#include "vm.h"
+#include "pfalloc.h"
+#include "logging.h"
+
+#define PT_PRESENT	(0x001)
+#define PT_READWRITE	(0x002)
+#define PT_USER	(0x004)
+#define PT_WRITETHRU	(0x008)
+#define PT_CACHEDIS	(0x010)
+#define PT_ACCESSED	(0x020)
+#define PT_DIRTY	(0x040)
+#define PT_ZERO	(0x080)
+#define PT_GLOBAL	(0x100)
+#define PT_CUSTOM1	(0x200)
+#define PT_CUSTOM2	(0x400)
+#define PT_CUSTOM3	(0x800)
+
+#define PT_ADDR_MASK 0xFFFFFF000
+#define PD_ADDR(entry) (entry & PT_ADDR_MASK)
+#define PD_IS_PRESENT(entry) ((entry & PT_PRESENT) != 0)
+
+#define PAGE_RESERVED (1021)
+#define PAGE_VMTEMP (1022)
+#define PAGE_VGA (1023)
+
+extern u32 boot_page_directory; // defined in boot.S
+extern u32 boot_page_table; // defined in boot.S
+static volatile u32* page_directory;
+static u32* kernel_page_table;
+static u32* vmtemp;
+
+void MM_Init() {
+  page_directory = &boot_page_directory;
+  kernel_page_table = &boot_page_table;
+  vmtemp = (u32*)(0xC03FE000);
+}
+
+bool MM_VirtualMap(void* vaddr, u32 physical) {
+	bool ret = false;
+
+  ASSERT(((u32)vaddr & PT_ADDR_MASK) == (u32)vaddr);
+  ASSERT((physical & PT_ADDR_MASK) == physical);
+
+	// Calculate PDT index of this vaddr
+  u32 pdi = (u32)vaddr >> 22;
+  auto pd_entry = page_directory[pdi];
+  // Map the page table
+  if(!PD_IS_PRESENT(pd_entry)) {
+    // Allocate frame for a new page table
+    ASSERT(!"UNIMPLEMENTED");
+  }
+  logprintf("Mapping page %x to frame %x\n", vaddr, physical);
+  kernel_page_table[PAGE_VMTEMP] = PD_ADDR(pd_entry) | (PT_PRESENT | PT_READWRITE);
+  logprintf("\tpdi=%x entry=%x\n", pdi, kernel_page_table[PAGE_VMTEMP]);
+  // Insert entry
+  u32 pti = ((u32)vaddr >> 12) & 0x3FF;
+  vmtemp[pti] = physical | PT_PRESENT | PT_READWRITE;
+  logprintf("\tpti=%x entry=%x\n", pti, vmtemp[pti]);
+  // Unmap the page table
+  kernel_page_table[PAGE_VMTEMP] = 0;
+
+	return ret;
+}
+
+bool MM_VirtualUnmap(void* vaddr) {
+	bool ret = false;
+
+  ASSERT(((u32)vaddr & PT_ADDR_MASK) == (u32)vaddr);
+
+	// Calculate PDT index of this vaddr
+  u32 pdi = (u32)vaddr >> 22;
+  auto pd_entry = page_directory[pdi];
+  // Is the page table present
+  if(PD_IS_PRESENT(pd_entry)) {
+    // Map page table
+    kernel_page_table[PAGE_VMTEMP] = PD_ADDR(pd_entry) | (PT_PRESENT | PT_READWRITE);
+    
+    // Clear table entry
+    u32 pti = ((u32)vaddr >> 12) & 0x3FF;
+    vmtemp[pti] = 0;
+
+    // Unmap the page table
+    kernel_page_table[PAGE_VMTEMP] = 0;
+
+    ret = true;
+  }
+  
+	return ret;
+}

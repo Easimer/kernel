@@ -12,11 +12,16 @@
 #include "disk.h"
 #include "volumes.h"
 #include "exec.h"
+#include "vm.h"
+#include "pfalloc.h"
 
 extern "C" void _init();
 extern "C" void _fini();
 
+extern "C" u32* boot_page_directory;
+
 extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
+    MM_Init();
     SSE_Setup();
     Log_Init();
     PCVGA_Init();
@@ -32,6 +37,8 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     } else {
         ASSERT(!"Didn't boot from a Multiboot2 bootloader");
     }
+
+    ASSERT(!"HALT");
 
     PS2_Setup();
 

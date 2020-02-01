@@ -39,6 +39,9 @@ section .bss
     boot_page_table:
     resb 4096
 
+global boot_page_directory
+global boot_page_table
+
 section .text
 global _start
 
@@ -90,10 +93,6 @@ _start:
     mov cr3, ecx
 
     mov esp, stack_top
-
-    ;TODO: This should be done after setting the GDT
-    ;push ds
-    ;pop es
 
     push ebx
     push eax

@@ -4,6 +4,21 @@
 #include "utils.h"
 #include "logging.h"
 
+#define GDT_ACCESSED    (0x01)
+#define GDT_READWRITE   (0x02)
+#define GDT_DIRECTION   (0x04)
+#define GDT_EXECUTABLE  (0x08)
+#define GDT_TYPE        (0x10)
+#define GDT_PRIV_LO     (0x20)
+#define GDT_PRIV_HI     (0x40)
+#define GDT_PRESENT     (0x80)
+#define GDT_PRIV(level) ((level & 0x3) << 5)
+
+#define GDT_KERNEL_DATA (GDT_PRESENT | GDT_PRIV(0) | GDT_TYPE | GDT_READWRITE)
+#define GDT_KERNEL_CODE (GDT_KERNEL_DATA | GDT_EXECUTABLE)
+#define GDT_USER_DATA (GDT_PRESENT | GDT_PRIV(3) | GDT_TYPE | GDT_READWRITE)
+#define GDT_USER_CODE (GDT_USER_DATA | GDT_EXECUTABLE)
+
 struct IDTD {
     u16 limit;
     u32 base;
@@ -29,7 +44,7 @@ struct GDT_Entry {
 } PACKED;
 
 static IDT_Entry idt[256];
-static GDT_Entry gdt[3];
+static GDT_Entry gdt[5];
 static IDTD idtd;
 static GDTD gdtd;
 static Interrupt_Handler handlers[256];
@@ -180,12 +195,14 @@ static void IDT_Setup() {
 }
 
 static void GDT_Setup() {
-    gdtd.limit = sizeof(GDT_Entry) * 3 - 1;
+    gdtd.limit = sizeof(GDT_Entry) * 5 - 1;
     gdtd.base = (u32)&gdt;
 
     GDT_Set_Gate(0, 0, 0, 0, 0);                // Null
-    GDT_Set_Gate(1, 0, 0xFFFFFFFF, 0x9A, 0xCF); // Code
-    GDT_Set_Gate(2, 0, 0xFFFFFFFF, 0x92, 0xCF); // Data
+    GDT_Set_Gate(1, 0, 0xFFFFFFFF, GDT_KERNEL_CODE, 0xCF); // Kernel code
+    GDT_Set_Gate(2, 0, 0xFFFFFFFF, GDT_KERNEL_DATA, 0xCF); // Kernel data
+    GDT_Set_Gate(3, 0, 0xFFFFFFFF, GDT_USER_CODE, 0xCF); // User code
+    GDT_Set_Gate(4, 0, 0xFFFFFFFF, GDT_USER_DATA, 0xCF); // User data
 
     GDT_Init(&gdtd);
 }
@@ -239,6 +256,7 @@ void Interrupts_Setup() {
     IDT_Setup();
 
     handlers[13] = GeneralProtectionFault;
+    handlers[14] = GeneralProtectionFault;
     handlers[0x80] = SyscallHandler;
 
     asm volatile("sti");
