@@ -250,7 +250,7 @@ static void ProcessGPT(u32 disk) {
 
         auto& type = *(GUID*)entry.part_type;
         if(type != guid_Unused) {
-            logprintf("Partition %x off=%x name='%s' type=", i, entry.lba_first, name);
+            logprintf("Partition %x off=%x name='%s' type=", i, (u32)entry.lba_first, name);
             PrintGUID(entry.part_type);
             logprintf("\n");
 
