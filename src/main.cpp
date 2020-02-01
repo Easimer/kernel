@@ -62,3 +62,13 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
 
     _fini();
 }
+
+// Stack protector
+u32 __stack_chk_guard = 0xe2dee396;
+extern "C" void __stack_chk_fail(void) {
+    ASSERT(!"Stack smashing detected");
+}
+
+extern "C" void __stack_chk_fail_local(void) {
+    ASSERT(!"Stack smashing detected");
+}
