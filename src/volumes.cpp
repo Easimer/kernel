@@ -43,6 +43,10 @@ Volume_Handle Volume_Register(const Volume_Descriptor* vol) {
     return ret;
 }
 
+u32 Volume_GetCount() {
+    return giVolumesLastIndex;
+}
+
 Filesystem* Volume_Get_Filesystem(Volume_Handle vol) {
     Filesystem* ret = NULL;
 

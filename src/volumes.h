@@ -61,6 +61,7 @@ using Filesystem_Register =  Filesystem_Descriptor* (*)();
 
 void Filesystem_Register_Filesystem(Filesystem_Register init);
 void Volume_Init();
+u32 Volume_GetCount();
 
 int File_Open(Volume_Handle volume, const char* path, mode_t flags);
 void File_Close(int fd);

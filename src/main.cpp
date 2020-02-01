@@ -54,7 +54,11 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
 
     logprintf("Loading COMMAND.EXE\n");
     const char* argv[] = {"/COMMAND.EXE"};
-    int ret = Execute_Program(3, "/COMMAND.EXE", 1, argv);
+    u32 max_volumes = Volume_GetCount();
+    int ret = -1;
+    for(u32 vol = 1; vol < max_volumes && ret == -1; vol++) {
+        ret = Execute_Program(vol, "/COMMAND.EXE", 1, argv);
+    }
     logprintf("COMMAND.EXE returned with code %d\n", ret);
 
     while(1) {
