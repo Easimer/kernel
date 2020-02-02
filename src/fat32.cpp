@@ -783,7 +783,7 @@ static s32 FS_Seek(void* user, Filesystem_File_Handle fd, whence_t whence, s32 p
             if(new_offset < 0) {
                 new_offset = 0;
             }
-            if(new_offset < ssize) {
+            if(new_offset <= ssize) {
                 F.current_cluster = F.cluster_start;
                 // Walk the list
                 u32 cluster_size = state->cluster_size;

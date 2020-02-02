@@ -3,6 +3,7 @@
 #include "port_io.h"
 #include "utils.h"
 #include "logging.h"
+#include "vm.h"
 
 #define GDT_ACCESSED    (0x01)
 #define GDT_READWRITE   (0x02)
@@ -223,16 +224,25 @@ static void GeneralProtectionFault(Registers* regs) {
 static void PageFault(Registers* regs) {
     u32 addr;
     asm volatile("movl %%cr2, %0" : "=r"(addr) :); // fetch the address that we tried to access
-    logprintf("======================\n");
-    logprintf("PAGE FAULT\n");
-    logprintf("EAX: %x EBX: %x ECX: %x EDX: %x\n", regs->eax, regs->ebx, regs->ecx, regs->edx);
-    logprintf("ESI: %x EDI: %x EBP: %x ESP: %x\n", regs->esi, regs->edi, regs->ebp, regs->esp);
-    logprintf("EIP: %x CS: %x EFLAGS: %x SS: %x\n", regs->eip, regs->cs, regs->eflags, regs->ss);
-    logprintf("ADDRESS: %x\n", addr);
-    logprintf("======================\n");
+    bool P = regs->err_code & 1;
+    bool W = regs->err_code & 2;
+    bool U = regs->err_code & 4;
+    bool R = regs->err_code & 8;
+    bool I = regs->err_code & 16;
 
-    while(1) {
-        asm volatile("hlt");
+    if(!MM_MapToPhysical(NULL, (void*)addr) || P) {
+        logprintf("======================\n");
+        logprintf("PAGE FAULT\n");
+        logprintf("EAX: %x EBX: %x ECX: %x EDX: %x\n", regs->eax, regs->ebx, regs->ecx, regs->edx);
+        logprintf("ESI: %x EDI: %x EBP: %x ESP: %x\n", regs->esi, regs->edi, regs->ebp, regs->esp);
+        logprintf("EIP: %x CS: %x EFLAGS: %x SS: %x\n", regs->eip, regs->cs, regs->eflags, regs->ss);
+        logprintf("ADDRESS: %x ERR: %c%c%c%c%c\n", addr, I ? 'I' : '-', R ? 'R' : '-', U ? 'U' : '-', W ? 'W' : 'R', P ? 'P' : '-');
+        MM_PrintDiagnostic((void*)addr);
+        logprintf("======================\n");
+
+        while(1) {
+            asm volatile("hlt");
+        }
     }
     // TODO: check if we were in kernel or user mode when we implement user mode
 }

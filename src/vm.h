@@ -11,4 +11,6 @@ void* MM_VirtualMapKernel(u32 physical, u32 page_count = 1);
 // Translate virtual address to physical address
 bool MM_MapToPhysical(u32* out_phys, void* addr);
 
+void MM_PrintDiagnostic(void* vaddr);
+
 #endif /* KERNEL_VM_H */

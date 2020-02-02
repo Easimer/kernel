@@ -62,6 +62,7 @@ bool MM_VirtualMap(void* vaddr, u32 physical) {
         u32 table_addr = PFA_Alloc(4096);
         ASSERT((table_addr & 0xFFFFF000) == table_addr); // make sure table is 4K-aligned
         pd_entry = page_directory[pdi] = table_addr | PT_PRESENT | PT_READWRITE;
+        asm volatile("mov %%cr3, %%eax\nmov %%eax, %%cr3\n":::"eax");
     }
     logprintf("Mapping page %x to frame %x\n", vaddr, physical);
     //kernel_page_table[PAGE_VMTEMP] = PD_ADDR(pd_entry) | (PT_PRESENT | PT_READWRITE);
@@ -74,6 +75,7 @@ bool MM_VirtualMap(void* vaddr, u32 physical) {
     // Unmap the page table
     //kernel_page_table[PAGE_VMTEMP] = 0;
     UnloadVMTemp();
+    ret = true;
 
     return ret;
 }
@@ -146,4 +148,48 @@ void* MM_VirtualMapKernel(u32 physical, u32 page_count) {
     }
 
     return ret;
+}
+
+bool MM_MapToPhysical(u32* out_phys, void* addr) {
+    bool ret = false;
+
+    if(addr) {
+        auto vaddr = ((u32)addr & 0xFFFFF000);
+        auto off = (u32)addr - vaddr;
+        u32 pdi = (u32)vaddr >> 22;
+        u32 pti = ((u32)vaddr >> 12) & 0x3FF;
+        u32 pd_entry = page_directory[pdi];
+        if(pd_entry & PT_PRESENT) {
+            LoadIntoVMTemp(PD_ADDR(pd_entry));
+            u32* pt = vmtemp;
+            auto pt_entry = pt[pti];
+            if(pt_entry & PT_PRESENT) {
+                if(out_phys) {
+                    *out_phys = PD_ADDR(pt_entry) + off;
+                }
+                ret = true;
+            }
+        }
+    }
+
+    return ret;
+}
+
+void MM_PrintDiagnostic(void* addr) {
+    auto vaddr = ((u32)addr & 0xFFFFF000);
+    auto off = (u32)addr - vaddr;
+    u32 pdi = (u32)vaddr >> 22;
+    u32 pti = ((u32)vaddr >> 12) & 0x3FF;
+    u32 pd_entry = page_directory[pdi];
+    logprintf("VM Diagnostic\n\tMemory access was %d bytes into page %x\n\tPage directory entry #%d for this was: %x\n\tPage table was %s\n",
+        off, vaddr, pdi, pd_entry, (pd_entry & PT_PRESENT) ? "PRESENT" : "NOT PRESENT");
+    if(pd_entry & PT_PRESENT) {
+        LoadIntoVMTemp(PD_ADDR(pd_entry));
+        u32* pt = vmtemp;
+        auto pt_entry = pt[pti];
+        logprintf("\n\tPage table entry #%d was: %x\n\tThe page was %s\n", pti, pt_entry, (pt_entry & PT_PRESENT) ? "PRESENT" : "NOT PRESENT");
+        if(pt_entry & PT_PRESENT) {
+            logprintf("\tPhysical address: %x\n", PD_ADDR(pt_entry));
+        }
+    }
 }
