@@ -30,7 +30,7 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     Interrupts_Setup();
     Timer_Setup();
 
-    logprintf("Hello World! %x\n", magic);
+    logprintf("Hello World!\n");
 
     if(IS_MULTIBOOT2_BOOT()) {
         MB2_Parse(mb2);
@@ -45,6 +45,8 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
 
     // Enumerate PCI devices
     PCI_Enumerate();
+
+    asm volatile("sti");
 
     // Probe partitions
     Disk_Partition_Probe();

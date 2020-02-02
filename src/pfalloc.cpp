@@ -278,7 +278,7 @@ u32 PFA_Alloc(u32 program_id, u32 size) {
         ret = region.addr_first;
     }
 
-    PFA_DebugPrint();
+    //PFA_DebugPrint();
 
     return ret;
 }

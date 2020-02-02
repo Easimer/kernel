@@ -56,19 +56,20 @@ void MB2_Parse(const MB2_Header* hdr) {
     MM_VirtualMap((void*)0xC03FD000, hdr_phys & 0xFFFFF000);
     auto tag_hdr = (const MB2_Tag_Header*)(vhdr + 1);
     logprintf("Parsing Multiboot2 info len=%x\n", vhdr->total_size);
-    // TODO: map hdr to an address
+    bool finish = false;
 
-    while(tag_hdr->type != 0) {
+    while(tag_hdr->type != 0 && !finish) {
         logprintf("Tag type=%d size=%x\n", tag_hdr->type, tag_hdr->size);
         switch(tag_hdr->type) {
             case MB2_TAG_MEMMAP:
                 MB2_Parse_MemMap((const MB2_Tag_Memory_Map*)tag_hdr);
+                finish = true;
                 break;
         }
         JUMP_NEXT_TAG(tag_hdr);
 
         // Break when we reached page boundary
-        if((u8*)tag_hdr >= page_end || (u8*)tag_hdr + tag_hdr->size >= page_end) {
+        if((u8*)tag_hdr >= page_end || ((u8*)&tag_hdr->size) >= page_end || (u8*)tag_hdr + tag_hdr->size >= page_end) {
             break;
         }
     }

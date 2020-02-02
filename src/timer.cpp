@@ -3,6 +3,7 @@
 #include "port_io.h"
 #include "interrupts.h"
 
+#include "logging.h"
 static volatile u32 ticks;
 
 static void TimerHandler(Registers* regs) {

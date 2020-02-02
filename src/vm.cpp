@@ -38,12 +38,12 @@ void MM_Init() {
 }
 
 static void LoadIntoVMTemp(u32 physical) {
-    logprintf("VMTEMP: loading %x\n", physical);
+    //logprintf("VMTEMP: loading %x\n", physical);
     kernel_page_table[PAGE_VMTEMP] = physical | (PT_PRESENT | PT_READWRITE);
 }
 
 static void UnloadVMTemp() {
-    logprintf("VMTEMP: unloading\n");
+    //logprintf("VMTEMP: unloading\n");
     kernel_page_table[PAGE_VMTEMP] = 0;
 }
 
@@ -64,14 +64,14 @@ bool MM_VirtualMap(void* vaddr, u32 physical) {
         pd_entry = page_directory[pdi] = table_addr | PT_PRESENT | PT_READWRITE;
         asm volatile("mov %%cr3, %%eax\nmov %%eax, %%cr3\n":::"eax");
     }
-    logprintf("Mapping page %x to frame %x\n", vaddr, physical);
+    //logprintf("Mapping page %x to frame %x\n", vaddr, physical);
     //kernel_page_table[PAGE_VMTEMP] = PD_ADDR(pd_entry) | (PT_PRESENT | PT_READWRITE);
     LoadIntoVMTemp(PD_ADDR(pd_entry));
-    logprintf("\tpdi=%x entry=%x\n", pdi, kernel_page_table[PAGE_VMTEMP]);
+    //logprintf("\tpdi=%x entry=%x\n", pdi, kernel_page_table[PAGE_VMTEMP]);
     // Insert entry
     u32 pti = ((u32)vaddr >> 12) & 0x3FF;
     vmtemp[pti] = physical | PT_PRESENT | PT_READWRITE;
-    logprintf("\tpti=%x entry=%x\n", pti, vmtemp[pti]);
+    //logprintf("\tpti=%x entry=%x\n", pti, vmtemp[pti]);
     // Unmap the page table
     //kernel_page_table[PAGE_VMTEMP] = 0;
     UnloadVMTemp();
@@ -112,7 +112,7 @@ void* MM_VirtualMapKernel(u32 physical, u32 page_count) {
     void* ret = NULL;
     ASSERT(page_count > 0);
 
-    logprintf("Mapping %d frames starting at %x\n", page_count, physical);
+    //logprintf("Mapping %d frames starting at %x\n", page_count, physical);
 
     for(u32 pdi = 768; pdi < 1024 && ret == NULL; pdi++) {
         //auto d_entry = kernel_page_subdirectory[pdi];
@@ -122,7 +122,7 @@ void* MM_VirtualMapKernel(u32 physical, u32 page_count) {
             LoadIntoVMTemp(addr);
 
             for(u32 pti = 0; pti < 1024; pti++) {
-                logprintf("\tPDI=%d PTI=%d\n", pdi, pti);
+                //logprintf("\tPDI=%d PTI=%d\n", pdi, pti);
                 if((vmtemp[pti] & PT_PRESENT) == 0) {
                     u32 i = 0;
                     while(i < page_count && pti + i < 1024 && (vmtemp[pti + i] & PT_PRESENT) == 0) {
@@ -131,10 +131,10 @@ void* MM_VirtualMapKernel(u32 physical, u32 page_count) {
                     if(i == page_count) {
                         for(u32 p = 0; p < page_count; p++) {
                             vmtemp[pti + p] = (physical + p * 4096) | PT_PRESENT | PT_READWRITE;
-                            logprintf("\tPDI=%d PTI=%d entry=%x\n", pdi, pti + p, vmtemp[pti + p]);
+                            //logprintf("\tPDI=%d PTI=%d entry=%x\n", pdi, pti + p, vmtemp[pti + p]);
                         }
                         ret = (void*)(pdi * 4096 * 1024 + pti * 4096);
-                        logprintf("\tRET=%x\n", ret);
+                        //logprintf("\tRET=%x\n", ret);
                         
                         break;
                     }

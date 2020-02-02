@@ -6,14 +6,16 @@
 #include "interrupts.h"
 #include "syscalls.h"
 #include "ring_buffer.h"
+#include "timer.h"
 
 #include "logging.h"
 
-#define MAX_BUFFERED_EVENTS (64)
+#define MAX_BUFFERED_EVENTS (256)
 
 struct PS2_Keyboard {
     u32 dev;
     u8 flags;
+    volatile bool ack, resend, echo;
     Ring_Buffer<Keyboard_Event, MAX_BUFFERED_EVENTS> event_buffer;
 };
 
@@ -65,17 +67,86 @@ static Virtual_Key VkMap_1B[256] = {
     UNK,
 };
 
+static bool SendCommandWaitForAck(PS2_Keyboard* kbd, u8 command) {
+    bool ret = false;
+
+    PS2_SendToDevice(kbd->dev, command);
+    auto end = TicksElapsed() + 1000;
+    while(TicksElapsed() < end && !kbd->ack) asm volatile("hlt");
+
+    ret = kbd->ack;
+    kbd->ack = false;
+
+    return ret;
+}
+
+static bool SendCommandAndDataWaitForAck(PS2_Keyboard* kbd, u8 command, u8 data) {
+    bool ret = false;
+
+    PS2_SendToDevice(kbd->dev, command);
+    PS2_SendToDevice(kbd->dev, data);
+    auto end = TicksElapsed() + 1000;
+    while(TicksElapsed() < end && !kbd->ack) asm volatile("hlt");
+
+    ret = kbd->ack;
+    kbd->ack = false;
+
+    return ret;
+}
+
+static bool SendEcho(PS2_Keyboard* kbd) {
+    bool ret = false;
+
+    PS2_SendToDevice(kbd->dev, 0xEE);
+    auto end = TicksElapsed() + 1000;
+    while(TicksElapsed() < end && !kbd->echo) asm volatile("hlt");
+
+    ret = kbd->echo;
+    kbd->echo = false;
+
+    return ret;
+}
+
 static bool EnableScanning(PS2_Keyboard* kb) {
     bool ret = false;
-    u8 res;
 
     ASSERT(kb);
-    PS2_SendToDevice(kb->dev, 0xF4);
+    
+    if(SendCommandWaitForAck(kb, 0xF4)) {
+        ret = true;
+        logprintf("ps2: enabled scanning on keyboard %d\n", kb->dev);
+    } else {
+        logprintf("ps2: failed to enable scanning on keyboard %d: no ACK or timed out\n", kb->dev);
+    }
 
-    if(PS2_ReadDataWithTimeout(1000, &res)) {
-        if(res == 0xFA) {
-            ret = true;
-        }
+    return ret;
+}
+
+static bool SetLEDs(PS2_Keyboard* kb, u32 mask) {
+    bool ret = false;
+
+    ASSERT(kb);
+    
+    if(SendCommandAndDataWaitForAck(kb, 0xED, mask)) {
+        ret = true;
+        logprintf("ps2: set LEDs on keyboard %d\n", kb->dev);
+    } else {
+        logprintf("ps2: failed to set LEDs on keyboard %d: no ACK or timed out\n", kb->dev);
+    }
+
+    return ret;
+}
+
+static bool SetScancodeSet(PS2_Keyboard* kb, u32 set) {
+    bool ret = false;
+
+    ASSERT(kb);
+    
+    if(SendCommandAndDataWaitForAck(kb, 0xF0, set)) {
+        ret = true;
+        logprintf("ps2: reset LEDs on keyboard %d\n", kb->dev);
+    } else {
+        logprintf("ps2: failed to reset LEDs on keyboard %d: no ACK or timed out\n", kb->dev);
     }
 
     return ret;
@@ -124,6 +195,8 @@ static void IRQHandler(Registers* regs) {
     u8 buf;
     PS2_Keyboard* kbd = NULL;
 
+    logprintf("kbd: irq %d\n", regs->int_no);
+
     if(regs->int_no == IRQ1) {
         kbd = gpKeyboards[0];
     } else if(regs->int_no == IRQ12) {
@@ -152,30 +225,45 @@ static void IRQHandler(Registers* regs) {
     }
 
     if(len > 0) {
-        if(MapSequenceToVK(len, sequence, &vk, &released)) {
-            // TODO: store this info somewhere
-            // TODO: keypress packet
-            Keyboard_Event ev;
-            ev.vk = (u32)vk;
-            ev.flags = kbd->flags;
-            if(released) ev.flags |= KBEV_RELEASED;
+        switch(sequence[0]) {
+            case 0xEE:
+            kbd->echo = true;
+            break;
+            case 0xFA:
+            kbd->ack = true;
+            break;
+            case 0xFE:
+            kbd->resend = true;
+            break;
+            default:
+            if(MapSequenceToVK(len, sequence, &vk, &released)) {
+                // TODO: store this info somewhere
+                // TODO: keypress packet
+                Keyboard_Event ev;
+                ev.vk = (u32)vk;
+                ev.flags = kbd->flags;
+                if(released) ev.flags |= KBEV_RELEASED;
 
-            if(vk == VK_LSHIFT || vk == VK_RSHIFT) {
-                if(released) {
-                    kbd->flags &= ~KBEV_SHIFT;
-                } else {
-                    kbd->flags |= KBEV_SHIFT;
+                if(vk == VK_LSHIFT || vk == VK_RSHIFT) {
+                    if(released) {
+                        kbd->flags &= ~KBEV_SHIFT;
+                    } else {
+                        kbd->flags |= KBEV_SHIFT;
+                    }
+                } else if(vk == VK_LCTRL || vk == VK_RCTRL) {
+                    if(released) {
+                        kbd->flags &= ~KBEV_CTRL;
+                    } else {
+                        kbd->flags |= KBEV_CTRL;
+                    }
                 }
-            } else if(vk == VK_LCTRL || vk == VK_RCTRL) {
-                if(released) {
-                    kbd->flags &= ~KBEV_CTRL;
-                } else {
-                    kbd->flags |= KBEV_CTRL;
-                }
+
+                logprintf("kbd: sc=%d flags=%x\n", ev.vk, ev.flags);
+                kbd->event_buffer.push(ev);
+            } else {
+                logprintf("kbd: cant map sequence\n");
             }
-
-            kbd->event_buffer.push(ev);
-        } else {
+            break;
         }
     }
 }
@@ -215,7 +303,19 @@ void PS2_Initialize_MF2_Keyboard(u32 dev) {
     state->flags = 0;
 
     RegisterSyscall();
-    Interrupts_Register_Handler(dev == 0 ? IRQ1 : IRQ12, IRQHandler);
+    //Interrupts_Register_Handler(dev == 0 ? IRQ1 : IRQ12, IRQHandler);
+    auto irq = dev == 0 ? IRQ1 : IRQ12;
+    PIC_Unmask(irq);
+    Interrupts_Register_Handler(irq, IRQHandler);
+    
+    SetLEDs(state, 7);
+    SetScancodeSet(state, 2);
 
     EnableScanning(state);
+
+    if(!SendEcho(state)) {
+        logprintf("ps2: keyboard echo failed\n");
+        ASSERT(0);
+    }
+    SetLEDs(state, 0);
 }

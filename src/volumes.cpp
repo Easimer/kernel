@@ -166,12 +166,14 @@ int File_Open(Volume_Handle volume, const char* path, mode_t flags) {
         if(ch != -1) {
             auto& V = gaVolumes[volume];
             auto& FS = V.filesystem;
-            auto handle = FS.desc->Open(FS.user, path, flags);
-            if(handle != -1) {
-                gaFDMap[ch].used = true;
-                gaFDMap[ch].fd = handle;
-                gaFDMap[ch].vol = volume;
-                ret = ch;
+            if(V.filesystem.desc && FS.desc->Open) {
+                auto handle = FS.desc->Open(FS.user, path, flags);
+                if(handle != -1) {
+                    gaFDMap[ch].used = true;
+                    gaFDMap[ch].fd = handle;
+                    gaFDMap[ch].vol = volume;
+                    ret = ch;
+                }
             }
         } else {
             logprintf("File handles exhausted\n");
@@ -190,7 +192,9 @@ void File_Close(int fd) {
             ASSERT(f.vol < giVolumesLastIndex);
             if(f.vol < giVolumesLastIndex) {
                 auto& V = gaVolumes[f.vol];
-                V.filesystem.desc->Close(V.filesystem.user, f.fd);
+                if(V.filesystem.desc && V.filesystem.desc->Close) {
+                    V.filesystem.desc->Close(V.filesystem.user, f.fd);
+                }
             }
             f.used = false;
         }
@@ -206,12 +210,12 @@ int File_Read(void* ptr, u32 size, u32 nmemb, int fd) {
                 auto& f = gaFDMap[fd];
                 ASSERT(f.vol < giVolumesLastIndex);
                 auto& V = gaVolumes[f.vol];
-                s32 res = V.filesystem.desc->Read(V.filesystem.user, f.fd, ptr, size * nmemb);
-                if(res > 0) {
-                    ASSERT(res % size == 0);
-                    ret = res / size;
-                } else {
-                    logprintf("RD ERROR\n");
+                if(V.filesystem.desc && V.filesystem.desc->Read) {
+                    s32 res = V.filesystem.desc->Read(V.filesystem.user, f.fd, ptr, size * nmemb);
+                    if(res > 0) {
+                        ASSERT(res % size == 0);
+                        ret = res / size;
+                    }
                 }
             }
         } else {
@@ -233,12 +237,12 @@ int File_Write(const void* ptr, u32 size, u32 nmemb, int fd) {
                 auto& f = gaFDMap[fd];
                 ASSERT(f.vol < giVolumesLastIndex);
                 auto& V = gaVolumes[f.vol];
-                s32 res = V.filesystem.desc->Write(V.filesystem.user, f.fd, ptr, size * nmemb);
-                if(res > 0) {
-                    ASSERT(res % size == 0);
-                    ret = res / size;
-                } else {
-                    logprintf("WR ERROR\n");
+                if(V.filesystem.desc && V.filesystem.desc->Write) {
+                    s32 res = V.filesystem.desc->Write(V.filesystem.user, f.fd, ptr, size * nmemb);
+                    if(res > 0) {
+                        ASSERT(res % size == 0);
+                        ret = res / size;
+                    }
                 }
             }
         } else {
@@ -257,7 +261,9 @@ void File_Seek(int fd, s32 offset, whence_t whence) {
             auto& f = gaFDMap[fd];
             ASSERT(f.vol < giVolumesLastIndex);
             auto& V = gaVolumes[f.vol];
-            V.filesystem.desc->Seek(V.filesystem.user, f.fd, whence, offset);
+            if(V.filesystem.desc && V.filesystem.desc->Seek) {
+                V.filesystem.desc->Seek(V.filesystem.user, f.fd, whence, offset);
+            }
         } else {
             //logprintf("FSEEK:: free fd\n");
         }
@@ -274,7 +280,7 @@ int File_Tell(int fd) {
             auto& f = gaFDMap[fd];
             ASSERT(f.vol < giVolumesLastIndex);
             auto& V = gaVolumes[f.vol];
-            if(V.filesystem.desc->Seek) {
+            if(V.filesystem.desc && V.filesystem.desc->Tell) {
                 ret = V.filesystem.desc->Tell(V.filesystem.user, f.fd);
             }
         }
@@ -286,7 +292,7 @@ int File_Tell(int fd) {
 void Sync(Volume_Handle volume) {
     ASSERT(volume < giVolumesLastIndex);
     auto& V = gaVolumes[volume];
-    if(V.filesystem.desc->Sync) {
+    if(V.filesystem.desc && V.filesystem.desc->Sync) {
         V.filesystem.desc->Sync(V.filesystem.user);
     }
 }
@@ -299,7 +305,9 @@ int File_EOF(int fd) {
             auto& f = gaFDMap[fd];
             ASSERT(f.vol < giVolumesLastIndex);
             auto& V = gaVolumes[f.vol];
-            ret = V.filesystem.desc->EOF(V.filesystem.user, f.fd);
+            if(V.filesystem.desc && V.filesystem.desc->EOF) {
+                ret = V.filesystem.desc->EOF(V.filesystem.user, f.fd);
+            }
         }
     }
 

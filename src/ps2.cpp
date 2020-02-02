@@ -119,6 +119,7 @@ static void FlushOutputBuffer() {
 static u8 ReadCfgByte() {
     u8 ret;
 
+    while(!CanSendData());
     SendCommand(0x20);
     while(!CanReadData());
     ret = ReadData();
@@ -127,6 +128,7 @@ static u8 ReadCfgByte() {
 }
 
 static void WriteCfgByte(u8 b) {
+    while(!CanSendData());
     SendCommand(0x60);
     while(!CanSendData());
     SendData(b);
@@ -138,7 +140,7 @@ static void InitCfgByte() {
     cfg = ReadCfgByte();
 
     gPS2.dual_channel = (cfg & CFG_CLOCK2);
-    cfg = cfg & ~(CFG_IRQ1 | CFG_IRQ2 | CFG_TRANS1);
+    cfg = (cfg & ~(CFG_IRQ1 | CFG_IRQ2 | CFG_TRANS1)) | CFG_CLOCK1;
 
     WriteCfgByte(cfg);
 }
@@ -192,17 +194,26 @@ static void EnableInterrupts(u32 i) {
     cfg = ReadCfgByte();
     if(i == 0) {
         cfg |= CFG_IRQ1;
+        cfg &= ~CFG_CLOCK1;
     } else if(i == 1) {
         cfg |= CFG_IRQ2;
+        cfg &= ~CFG_CLOCK2;
     } else {
         ASSERT(!"EnableInterrupts i > 1");
     }
     WriteCfgByte(cfg);
+    cfg = ReadCfgByte();
+    if((cfg & ((i == 0) ? CFG_IRQ1 : CFG_IRQ2)) == 0) {
+        logprintf("ps2: failed to enable interrupts for device %d cfg=%x\n", i, cfg);
+        ASSERT(0);
+    }
+    logprintf("ps2: cfg byte is %x\n", cfg);
 }
 
 #define SendToDevice PS2_SendToDevice
 void PS2_SendToDevice(u32 dev, u8 v) {
     if(dev != 0) {
+        while(!CanSendData());
         SendCommand(0xD4);
     }
     while(!CanSendData());
@@ -303,6 +314,7 @@ void PS2_Setup() {
         }
     } else {
         gPS2.has_ps2 = false;
+        logprintf("ps2: not supported\n");
     }
 }
 
