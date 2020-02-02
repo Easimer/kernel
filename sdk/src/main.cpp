@@ -56,13 +56,31 @@ static void ReadCommand(char* buffer, int buffer_siz) {
 
 }
 
+extern int fd_stdout;
+extern int fd_stderr;
+extern int fd_stdin;
+
+#define STDOUT (fd_stdout)
+#define STDIN (fd_stdin)
+#define STDERR (fd_stderr)
+
+static int strlen(const char* s) {
+    auto c = s;
+    while(*c++);
+    return c - s;
+}
+
+static void print_stdout(const char* string) {
+    write(STDOUT, string, 1, strlen(string));
+}
+
 int main(int argc, char** argv) {
     int rc = 0;
     Keyboard_Event ev;
     char ch;
     bool over = false;
 
-    print("Test program\nPress 'Q' to exit!\n");
+    print_stdout("Test program\nPress 'Q' to exit!\n");
     do {
         if(poll_kbd(0, &ev)) {
             if(TranslateVK(&ch, ev) && ch == 'q') {

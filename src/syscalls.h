@@ -13,10 +13,6 @@
 // EBX=whence ECX=position EDX=fd EAX<-0
 #define SYSCALL_TELL            (0x0005)
 // EDX=fd EAX<-position
-#define SYSCALL_PRINT           (0x0006)
-// ESI=zstring
-#define SYSCALL_PRINTCH         (0x0007)
-// EDX=char
 
 #define SYSCALL_POLLKBD         (0x0008)
 // ECX=Keyboard #ID EDX=Keyboard_Event* EAX<-valid

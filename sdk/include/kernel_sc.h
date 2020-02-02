@@ -22,8 +22,6 @@ CLINK int open(unsigned long volume, const char* path, int mode);
 CLINK void close(int fd);
 CLINK void seek(int fd, int whence, int position);
 CLINK int tell(int fd);
-CLINK void print(const char* zstring);
-CLINK void printch(char ch);
 CLINK int poll_kbd(int id, Keyboard_Event* buf);
 
 #endif /* KERNEL_SYSCALL_H */
