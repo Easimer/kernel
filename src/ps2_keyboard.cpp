@@ -7,6 +7,7 @@
 #include "syscalls.h"
 #include "ring_buffer.h"
 #include "timer.h"
+#include "dev_fs.h"
 
 #include "logging.h"
 
@@ -17,6 +18,7 @@ struct PS2_Keyboard {
     u8 flags;
     volatile bool ack, resend, echo;
     Ring_Buffer<Keyboard_Event, MAX_BUFFERED_EVENTS> event_buffer;
+    Ring_Buffer<char, 128> char_buffer;
 };
 
 static PS2_Keyboard* gpKeyboards[2] = { NULL, NULL };
@@ -32,7 +34,7 @@ static bool gbRegisteredSyscall = false;
 static Virtual_Key VkMap_1B[256] = {
     UNK, VK_F9, UNK, VK_F5,
     VK_F3, VK_F1, VK_F2, VK_F12,
-    UNK, VK_F10, VK_F8, UNK,
+    UNK, VK_F10, VK_F8, VK_F6,
     VK_F4, VK_TAB, VK_BACKTICK, UNK,
     UNK, VK_META, VK_LSHIFT, UNK,
     VK_LCTRL, VK_q, VK_1, UNK,
@@ -143,8 +145,8 @@ static bool SetScancodeSet(PS2_Keyboard* kb, u32 set) {
     ASSERT(kb);
     
     if(SendCommandAndDataWaitForAck(kb, 0xF0, set)) {
-        ret = true;
-        logprintf("ps2: reset LEDs on keyboard %d\n", kb->dev);
+        logprintf("ps2: set scancode set on keyboard %d to %d\n", kb->dev, set);
+        // TODO: check if SCS was actually set
     } else {
         logprintf("ps2: failed to reset LEDs on keyboard %d: no ACK or timed out\n", kb->dev);
     }
@@ -194,8 +196,6 @@ static void IRQHandler(Registers* regs) {
     u32 remains = 16;
     u8 buf;
     PS2_Keyboard* kbd = NULL;
-
-    logprintf("kbd: irq %d\n", regs->int_no);
 
     if(regs->int_no == IRQ1) {
         kbd = gpKeyboards[0];
@@ -258,10 +258,10 @@ static void IRQHandler(Registers* regs) {
                     }
                 }
 
-                logprintf("kbd: sc=%d flags=%x\n", ev.vk, ev.flags);
+                //logprintf("kbd: sc=%d flags=%x\n", ev.vk, ev.flags);
                 kbd->event_buffer.push(ev);
             } else {
-                logprintf("kbd: cant map sequence\n");
+                //logprintf("kbd: cant map sequence\n");
             }
             break;
         }
@@ -292,6 +292,106 @@ static void RegisterSyscall() {
     }
 }
 
+static char bt_bp_map[] = {
+    '`', '-', '=', '[', ']', ';', '\'', '\\', ',', '.', '/', '\n', '\b'
+};
+
+static char bt_bp_shift_map[] = {
+    '~', '_', '+', '{', '}', ':', '"', '|', '<', '>', '?', '\n', '\b'
+};
+
+static const char* vt_seq_map[] = {
+    "\033[11~", "\033[12~", "\033[13~", "\033[14~", "\033[15~", "\033[17~",
+    "\033[18~", "\033[19~", "\033[20~", "\033[21~", "\033[23~", "\033[24~",
+    "", "", "", "", "", "", "", "", "", "", "", "", "", 
+    "\033[7~", "\033[8~", "\033[2~", "\033[3~", "\033[5~", "\033[6~", 
+    "", "", "", "", "", "", "", "",
+    "\033[A", "\033[D", "\033[B", "\033[C",
+};
+
+// TODO: This doesn't belong here
+template<u32 Size>
+static bool TranslateControlSequence(Ring_Buffer<char, Size>* dst, const Keyboard_Event& ev) {
+    char ch;
+
+    if(ev.vk >= VK_0 && ev.vk <= VK_9) {
+        ch = '0' + (ev.vk - VK_0);
+        goto single_char;
+    } else if(ev.vk >= VK_a && ev.vk <= VK_z) {
+        if(ev.flags & KBEV_CTRL) {
+            switch(ev.vk) {
+                case VK_d:
+                    ch = '\x04'; // EOT
+                    break;
+                default:
+                    dst->push('^');
+                    dst->push('A' + (ev.vk - VK_a));
+                    goto mapped;
+            }
+        } else {
+            ch = ((ev.flags & KBEV_SHIFT) ? 'A' : 'a') + (ev.vk - VK_a);
+        }
+        goto single_char;
+    } else if(ev.vk == VK_SPACE) {
+        ch = ' ';
+        goto single_char;
+    } else if(ev.vk == VK_ESCAPE) {
+        ch = '\033';
+        goto single_char;
+    } else if(ev.vk >= VK_BACKTICK && ev.vk <= VK_BACKSPACE) {
+        ch = ((ev.flags & KBEV_SHIFT) ? bt_bp_shift_map : bt_bp_map)[ev.vk - VK_BACKTICK];
+        goto single_char;
+    } else if(ev.vk >= VK_F1 && ev.vk <= VK_RIGHT) {
+        auto seq = vt_seq_map[ev.vk - VK_F1];
+        while(*seq) {
+            dst->push(*seq);
+            seq++;
+        }
+        goto mapped;
+    } else {
+        goto cant_map;
+    }
+
+single_char:
+    dst->push(ch);
+mapped:
+    return true;
+cant_map:
+    return false;
+}
+
+static bool CHDEV_Send(void* user, char ch) {
+    (void)user;
+    (void)ch;
+    return false;
+}
+static bool CHDEV_Recv(void* user, char* ch) {
+    bool ret = false;
+    ASSERT(user != NULL);
+    auto kbd = (PS2_Keyboard*)user;
+    Keyboard_Event ev;
+
+    if(kbd->char_buffer.pop(ch)) {
+        ret = true;
+    } else {
+        if(kbd->event_buffer.pop(&ev)) {
+            if((ev.flags & KBEV_RELEASED) && TranslateControlSequence(&kbd->char_buffer, ev)) {
+                if(kbd->char_buffer.pop(ch)) {
+                    ret = true;
+                }
+            }
+        }
+    }
+
+    return ret;
+}
+
+static struct Character_Device_Descriptor gTTY = {
+    .Name = "PS/2 Keyboard",
+    .Send = CHDEV_Send,
+    .Recv = CHDEV_Recv,
+};
+
 void PS2_Initialize_MF2_Keyboard(u32 dev) {
     ASSERT(dev < 2);
     ASSERT(gpKeyboards[dev] == NULL);
@@ -318,4 +418,6 @@ void PS2_Initialize_MF2_Keyboard(u32 dev) {
         ASSERT(0);
     }
     SetLEDs(state, 0);
+
+    CharDev_Register(state, &gTTY);
 }

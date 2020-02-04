@@ -46,6 +46,15 @@ static Memory_Region* FindUnusedRegion() {
     return ret;
 }
 
+static void PFA_DebugPrint() {
+    auto cur = gMemoryRegions;
+    logprintf("Memory regions:\n");
+    while(cur) {
+        logprintf("\t(%d) %x -> %x\n", cur->type, cur->addr_first, cur->addr_last);
+        cur = cur->next;
+    }
+}
+
 // Tries inserting the region
 static void InsertRegion(const Memory_Region& region) {
     bool inserted = false;
@@ -154,6 +163,11 @@ static void InsertRegion(const Memory_Region& region) {
         cur = cur->next;
     }
 
+    if(!inserted) {
+        logprintf("Failed to insert region [%x, %x]\n", region.addr_first, region.addr_last);
+        PFA_DebugPrint();
+    }
+
     ASSERT(inserted);
 }
 
@@ -219,15 +233,8 @@ void PFA_Init(u32 last_physical_address) {
 
     gMemoryRegions = &gMemoryRegionPool[0];
     gMemoryRegionsLast = &gMemoryRegionPool[0];
-}
 
-static void PFA_DebugPrint() {
-    auto cur = gMemoryRegions;
-    logprintf("Memory regions:\n");
-    while(cur) {
-        logprintf("\t(%d) %x -> %x\n", cur->type, cur->addr_first, cur->addr_last);
-        cur = cur->next;
-    }
+    logprintf("pfalloc: memory is [0x0, %x]\n", last_physical_address);
 }
 
 void PFA_PostInit() {

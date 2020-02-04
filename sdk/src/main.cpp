@@ -1,61 +1,5 @@
 #include "kernel_sc.h"
 
-static char VKMap[VK_UNKNOWN] = "0123456789abcdefghijklmnopqrstuvwxyz \0\0\0\0\0\0\0\0\0\0\0\0\0`-=[];'\\,./\n\b\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-static char VKMapShift[VK_UNKNOWN] = ")!@#$%^&*(ABCDEFGHIJKLMNOPQRSTUVWXYZ \0\0\0\0\0\0\0\0\0\0\0\0\0`_+{}:\"|<>?\n\b\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
-
-static bool TranslateVK(char* out, const Keyboard_Event& ev) {
-    bool ret = false;
-
-
-    if(!(ev.flags & KBEV_RELEASED)) {
-        char c;
-        if(ev.flags & KBEV_SHIFT) {
-            c = VKMapShift[ev.vk];
-        } else {
-            c = VKMap[ev.vk];
-        }
-
-        if(c != '\0') {
-            ret = true;
-            *out = c;
-        }
-    }
-
-    return ret;
-}
-
-static void ReadCommand(char* buffer, int buffer_siz) {
-    int cur = 0;
-    bool over = false;
-
-    buffer[0] = 0;
-
-    while(!over) {
-        Keyboard_Event ev;
-        if(poll_kbd(0, &ev)) {
-            bool released = ev.flags & KBEV_RELEASED;
-            if(ev.vk == VK_RETURN) {
-                over = true;
-            } else if(ev.vk == VK_BACKSPACE && !released) {
-                if(cur != 0) {
-                    buffer[cur] = 0;
-                    cur--;
-                }
-            } else {
-                char ch;
-                if(TranslateVK(&ch, ev)) {
-                    if(cur < buffer_siz - 1) {
-                        buffer[cur + 0] = ch;
-                        buffer[cur + 1] = 0;
-                        cur++;
-                    }
-                }
-            }
-        }
-    }
-
-}
-
 extern int fd_stdout;
 extern int fd_stderr;
 extern int fd_stdin;
@@ -67,7 +11,7 @@ extern int fd_stdin;
 static int strlen(const char* s) {
     auto c = s;
     while(*c++);
-    return c - s;
+    return c - s - 1;
 }
 
 static void print_stdout(const char* string) {
@@ -80,14 +24,23 @@ int main(int argc, char** argv) {
     char ch;
     bool over = false;
 
-    print_stdout("Test program\nPress 'Q' to exit!\n");
-    do {
-        if(poll_kbd(0, &ev)) {
-            if(TranslateVK(&ch, ev) && ch == 'q') {
-                over = true;
+    int keyboard = open(0, "tty1", O_RDONLY);
+    if(keyboard != -1) {
+        print_stdout("Opened keyboard, echoing input:\n");
+        for(;;) {
+            char ch;
+            if(read(keyboard, &ch, 1, 1) == 1) {
+                if(ch == '\x04') {
+                    break;
+                } else {
+                    char buf[2] = {ch, '\0'};
+                    print_stdout(buf);
+                }
             }
         }
-    } while(!over);
+    } else {
+        print_stdout("Failed to open keyboard for reading!\n");
+    }
 
     return rc;
 }

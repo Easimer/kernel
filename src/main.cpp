@@ -14,6 +14,7 @@
 #include "exec.h"
 #include "vm.h"
 #include "pfalloc.h"
+#include "dev_fs.h"
 
 extern "C" void _init();
 extern "C" void _fini();
@@ -24,6 +25,7 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     MM_Init();
     SSE_Setup();
     Log_Init();
+    CharDev_Init();
     PCVGA_Init();
     UART_Setup(PORT_COM1);
 

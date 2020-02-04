@@ -6,6 +6,9 @@
 #include "uart.h"
 #include "pc_vga.h"
 
+#include "dev_fs.h"
+#include "logging.h"
+
 enum Filetype {
     FT_Invalid = 0,
     FT_Null, // /dev/null
@@ -13,9 +16,17 @@ enum Filetype {
     FT_Serial, // COM1-4
     FT_VGA, // VGA framebuffer
     FT_Memory, // Memory access
+    FT_TTY, // Teletype
 };
 
 #define MAX_OPEN_FILES (16)
+#define MAX_CHARDEVS (10)
+
+struct Character_Device {
+    bool used;
+    void* user;
+    Character_Device_Descriptor* op;
+};
 
 struct File_State {
     Filetype type;
@@ -33,12 +44,17 @@ struct File_State {
             void* addr;
             bool write;
         } mem;
+        struct TTY {
+            Character_Device* dev;
+        } tty;
     } state;
 };
 
 struct DevFS_State {
     File_State files[MAX_OPEN_FILES];
 };
+
+static Character_Device chardevs[MAX_CHARDEVS];
 
 static s32 FindFreeHandle(DevFS_State* fs) {
     s32 ret = -1;
@@ -50,6 +66,38 @@ static s32 FindFreeHandle(DevFS_State* fs) {
     return ret;
 }
 
+int CharDev_Init() {
+    int rc = 0;
+
+    for(int i = 0; i < MAX_CHARDEVS; i++) {
+        chardevs[i].used = false;
+    }
+
+    return rc;
+}
+
+int CharDev_Register(void* user, Character_Device_Descriptor* op) {
+    int rc = -1;
+
+    for(int i = 0; i < MAX_CHARDEVS; i++) {
+        if(!chardevs[i].used) {
+            auto& D = chardevs[i];
+            D.used = true;
+            D.op = op;
+            D.user = user;
+            rc = 0;
+            if(op->Name) {
+                logprintf("chardev: registered new TTY device #%d '%s'\n", i, op->Name);
+            } else {
+                logprintf("chardev: registered new TTY device #%d\n", i);
+            }
+            break;
+        }
+    }
+
+    return rc;
+}
+
 static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags) {
     auto fs = (DevFS_State*)user;
     Filesystem_File_Handle ret = -1;
@@ -59,13 +107,18 @@ static Filesystem_File_Handle FS_Open(void* user, const char* path, mode_t flags
         if(strncmp("tty", path, 3)) {
             char idch = path[3];
             u32 id = (idch - '0');
-            if(id < 4) {
+            logprintf("devfs: attempting to open tty #%d used? %s\n", id, chardevs[id].used ? "yes" : "no");
+            if(id < MAX_CHARDEVS && chardevs[id].used) {
                 ret = Filesystem_File_Handle(FindFreeHandle(fs));
                 if(ret != -1) {
                     auto& F = fs->files[ret];
-                    F.type = FT_Serial;
-                    F.state.serial.port_id = id;
+                    F.type = FT_TTY;
+                    F.state.tty.dev = &chardevs[id];
+                } else {
+                    logprintf("devfs: out of handles\n");
                 }
+            } else {
+                logprintf("devfs: TTY id is out of range\n");
             }
         } else if(strcmp("mem", path)) {
             ret = Filesystem_File_Handle(FindFreeHandle(fs));
@@ -138,6 +191,13 @@ static s32 FS_Read(void* user, Filesystem_File_Handle fd, void* dst, u32 bytes) 
                 memcpy(dst, F.state.mem.addr, bytes);
                 F.state.mem.addr = ((u8*)F.state.mem.addr + bytes);
                 break;
+            case FT_TTY:
+                if(F.state.tty.dev->op->Recv(F.state.tty.dev->user, (char*)dst)) {
+                    ret = 1;
+                } else {
+                    ret = 0;
+                }
+                break;
             default:
                 break;
         }
@@ -175,6 +235,13 @@ static s32 FS_Write(void* user, Filesystem_File_Handle fd, const void* src, u32 
             case FT_VGA:
                 for(u32 i = 0; i < bytes; i++) {
                     PCVGA_PutChar(((u8*)src)[i]);
+                }
+                break;
+            case FT_TTY:
+                if(F.state.tty.dev->op->Send(F.state.tty.dev->user, *(char*)src)) {
+                    ret = 1;
+                } else {
+                    ret = 0;
                 }
                 break;
             default:

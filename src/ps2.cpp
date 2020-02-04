@@ -39,6 +39,22 @@
 #define CMD_ENABLE2         (0xA8)
 #define CMD_SELFTEST        (0xAA)
 
+struct control_reg_t {
+public:
+    control_reg_t(u8 v) : value(v) {}
+    explicit operator u8() const { return value; }
+    control_reg_t& operator|=(u8 mask) {
+        value |= mask;
+        return *this;
+    }
+    control_reg_t& operator&=(u8 mask) {
+        value &= mask;
+        return *this;
+    }
+private:
+    u8 value;
+};
+
 enum PS2_Interface {
     IF_None,
     IF_Keyboard,
@@ -116,41 +132,61 @@ static void FlushOutputBuffer() {
     }
 }
 
-static u8 ReadCfgByte() {
-    u8 ret;
-
+static control_reg_t ReadCfgByte() {
     while(!CanSendData());
     SendCommand(0x20);
     while(!CanReadData());
-    ret = ReadData();
-
+    auto ret = control_reg_t(ReadData());
+    //logprintf("ps2: read cfg=%x\n", (u8)ret);
     return ret;
 }
 
-static void WriteCfgByte(u8 b) {
-    while(!CanSendData());
-    SendCommand(0x60);
-    while(!CanSendData());
-    SendData(b);
+static void WriteCfgByte(control_reg_t b) {
+    int n = 0;
+    do {
+        while(!CanSendData());
+        SendCommand(0x60);
+        while(!CanSendData());
+        SendData((u8)b);
+        // Make sure cfg byte was really written
+        while(!CanSendData());
+        SendCommand(0x20);
+        while(!CanReadData());
+        u8 cfg = ReadData();
+        if(cfg == (u8)b) {
+            //logprintf("ps2: written cfg=%x\n", (u8)b);
+            return;
+        }
+    } while(n++ < 5);
+    logprintf("ps2: failed to write cfg=%x\n", (u8)b);
+    
 }
 
 static void InitCfgByte() {
-    u8 cfg;
+    u8 status;
 
-    cfg = ReadCfgByte();
+    auto cfg = ReadCfgByte();
+    status = ReadStatus();
 
-    gPS2.dual_channel = (cfg & CFG_CLOCK2);
-    cfg = (cfg & ~(CFG_IRQ1 | CFG_IRQ2 | CFG_TRANS1)) | CFG_CLOCK1;
+    gPS2.dual_channel = ((u8)cfg & CFG_CLOCK2);
+    cfg &= ~(CFG_IRQ1 | CFG_IRQ2 | CFG_TRANS1);
+    cfg |= CFG_CLOCK1 | CFG_CLOCK2;
+
+    // keylock
+    if((~status) & 0x10) {
+        cfg |= 0x08;
+        logprintf("ps2: ignoring keylock\n");
+    }
 
     WriteCfgByte(cfg);
 }
 
 static void DetermineDualChannel() {
-    u8 cfg;
     if(!gPS2.dual_channel) {
         SendCommand(0xA8);
-        cfg = ReadCfgByte();
-        if(!(cfg & CFG_CLOCK2)) {
+        auto cfg = ReadCfgByte();
+        // TODO: isn't this redundant
+        if(!((u8)cfg & CFG_CLOCK2)) {
             gPS2.dual_channel = true;
         }
     }
@@ -159,11 +195,15 @@ static void DetermineDualChannel() {
 static bool DoSelfTest() {
     bool ret = false;
     u8 res;
-    SendCommand(CMD_SELFTEST);
-    while(!CanReadData());
-    res = ReadData();
 
-    ret = res == 0x55;
+    for(int i = 0; i < 5; i++) {
+        SendCommand(CMD_SELFTEST);
+        if(ReadDataWithTimeout(1000, &res)) {
+            if(res == 0x55) {
+                ret = true;
+            }
+        }
+    }
 
     return ret;
 }
@@ -190,8 +230,7 @@ static void TestInterfaces() {
 }
 
 static void EnableInterrupts(u32 i) {
-    u8 cfg;
-    cfg = ReadCfgByte();
+    auto cfg = ReadCfgByte();
     if(i == 0) {
         cfg |= CFG_IRQ1;
         cfg &= ~CFG_CLOCK1;
@@ -203,11 +242,10 @@ static void EnableInterrupts(u32 i) {
     }
     WriteCfgByte(cfg);
     cfg = ReadCfgByte();
-    if((cfg & ((i == 0) ? CFG_IRQ1 : CFG_IRQ2)) == 0) {
+    if(((u8)cfg & ((i == 0) ? CFG_IRQ1 : CFG_IRQ2)) == 0) {
         logprintf("ps2: failed to enable interrupts for device %d cfg=%x\n", i, cfg);
         ASSERT(0);
     }
-    logprintf("ps2: cfg byte is %x\n", cfg);
 }
 
 #define SendToDevice PS2_SendToDevice
@@ -280,6 +318,10 @@ static void InitializeDevice(u32 dev) {
 }
 
 void PS2_Setup() {
+    // TEMP
+    auto cfg = ReadCfgByte();
+    logprintf("ps2: before init cfg byte was %x\n", (u8)cfg);
+    // TEMP
     if(SystemHasPS2()) {
         gPS2.has_ps2 = true;
         PS2_Disable();

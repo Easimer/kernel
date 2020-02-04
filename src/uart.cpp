@@ -3,6 +3,8 @@
 #include "port_io.h"
 #include "logging.h"
 
+#include "dev_fs.h"
+
 #define BUFFER_SIZE (8)
 
 struct UART_State {
@@ -81,9 +83,30 @@ void UART_Flush(int port) {
     }
 }
 
+static bool UART_CharSend(void* user, char ch) {
+    bool ret = false;
+    auto state = (UART_State*)user;
+
+    WriteChar(state, ch);
+
+    return ret;
+}
+
+static bool UART_CharRecv(void* user, char* ch) {
+    (void)user;
+    (void)ch;
+    return false;
+}
+
 static Log_Destination gLogDst = {
     .WriteString = UART_WriteString,
     .WriteChar = UART_WriteChar,
+};
+
+struct Character_Device_Descriptor gCOM = {
+    .Name = "UART Serial Port",
+    .Send = UART_CharSend,
+    .Recv = UART_CharRecv,
 };
 
 void UART_Setup(int port) {
@@ -101,6 +124,8 @@ void UART_Setup(int port) {
     gPorts[port].buffer_count = 0;
     gPorts[port].addr = addr;
     Log_Register(gPorts + port, &gLogDst);
+
+    CharDev_Register(gPorts + port, &gCOM);
 }
 
 void UART_Shutdown(int port) {
