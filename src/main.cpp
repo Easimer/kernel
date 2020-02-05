@@ -15,6 +15,7 @@
 #include "vm.h"
 #include "pfalloc.h"
 #include "dev_fs.h"
+#include "process.h"
 
 extern "C" void _init();
 extern "C" void _fini();
@@ -30,6 +31,7 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     UART_Setup(PORT_COM1);
 
     Interrupts_Setup();
+    Scheduler_Init();
     Timer_Setup();
 
     logprintf("Hello World!\n");
@@ -56,6 +58,8 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     // Initialize volume manager
     Volume_Init();
 
+    Scheduler_LoadInit();
+    /*
     logprintf("Loading COMMAND.EXE\n");
     const char* argv[] = {"/COMMAND.EXE"};
     u32 max_volumes = Volume_GetCount();
@@ -64,6 +68,7 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
         ret = Execute_Program(vol, "/COMMAND.EXE", 1, argv);
     }
     logprintf("COMMAND.EXE returned with code %d\n", ret);
+    */
 
     while(1) {
     }

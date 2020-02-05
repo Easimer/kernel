@@ -3,13 +3,16 @@
 
 void Mem_Init(void* base, u32 length);
 
-#define MEM_POOL_KERNEL (0)
-#define MEM_POOL_USER   (1)
-
-void* pmalloc(int pool, u32 size);
-void pfree(int pool, void* addr);
-
 void* kmalloc(u32 size);
 void kfree(void* addr);
+
+bool AllocatePageDirectory(u32* res);
+bool FreePageDirectory(u32 pd_phys);
+void SwitchPageDirectory(u32 pd_phys);
+
+void* AllocateProgramMemory(u32 pd, u32 size);
+void* AllocateProgramMemory(u32 size);
+void FreeProgramMemory(u32 pd, void* size);
+void FreeProgramMemory(void* size);
 
 #endif /* KERNEL_MEMORY_H */
