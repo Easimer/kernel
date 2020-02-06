@@ -32,6 +32,10 @@ static bool IsTransmitEmpty(u16 addr) {
 static void PutChar(u16 addr, char ch) {
     while(!IsTransmitEmpty(addr));
 
+    if(ch == '\n') {
+        outb(addr, '\r');
+    }
+
     outb(addr, ch);
 }
 
@@ -44,13 +48,26 @@ static void Flush(UART_State* state) {
     state->buffer_count = 0;
 }
 
-static void WriteChar(UART_State* state, char ch) {
-    // Place char into buffer
-    state->buffer[state->buffer_count++] = ch;
+// Filters out control characters that we don't want to send to
+// the other end.
+static inline bool IsPrintable(char ch) {
+    bool ret = false;
 
-    // Flush when full or newline
-    if(state->buffer_count == BUFFER_SIZE || ch == '\n') {
-        Flush(state);
+    ret |= (ch >= ' ' && ch < 127);
+    ret |= (ch == '\t' || ch == '\n' || ch == '\b');
+
+    return ret;
+}
+
+static void WriteChar(UART_State* state, char ch) {
+    if(IsPrintable(ch)) {
+        // Place char into buffer
+        state->buffer[state->buffer_count++] = ch;
+
+        // Flush when full or newline
+        if(state->buffer_count == BUFFER_SIZE || ch == '\n') {
+            Flush(state);
+        }
     }
 }
 

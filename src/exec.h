@@ -6,6 +6,7 @@
 
 #define EXEC_ERR_NOTFOUND (-1)
 #define EXEC_ERR_NOTANEXE (-2)
+#define EXEC_ERR_NOMEM (-3)
 
 int Execute_Program(Volume_Handle volume, const char* path, int argc, const char** argv);
 

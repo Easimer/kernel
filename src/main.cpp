@@ -23,12 +23,13 @@ extern "C" void _fini();
 extern "C" u32* boot_page_directory;
 
 extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
-    MM_Init();
+    
     SSE_Setup();
     Log_Init();
     CharDev_Init();
     PCVGA_Init();
     UART_Setup(PORT_COM1);
+    MM_Init(); // TODO: move this back to line 26
 
     Interrupts_Setup();
     Scheduler_Init();

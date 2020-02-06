@@ -8,7 +8,7 @@
 #include "vm.h"
 #include "utils.h"
 
-int Execute_Program(Volume_Handle volume, const char* path, int argc, const char** argv) {
+int Execute_Program_Old(Volume_Handle volume, const char* path, int argc, const char** argv) {
     int ret = EXEC_ERR_NOTFOUND, rd;
 
     logprintf("Execute_Program(%s);\n", path);

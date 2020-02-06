@@ -276,13 +276,17 @@ u32 PFA_Alloc(u32 program_id, u32 size) {
             cur = cur->next;
         }
 
-        region.addr_first = candidate->addr_first;
-        region.addr_last = region.addr_first + size - 1;
-        region.program_id = program_id;
-        region.type = program_id == 0 ? MRT_Kernel : MRT_Program;
-        InsertRegion(region);
+        if(candidate) {
+            region.addr_first = candidate->addr_first;
+            region.addr_last = region.addr_first + size - 1;
+            region.program_id = program_id;
+            region.type = program_id == 0 ? MRT_Kernel : MRT_Program;
+            InsertRegion(region);
 
-        ret = region.addr_first;
+            ret = region.addr_first;
+        } else {
+            ASSERT(!"Out of memory");
+        }
     }
 
     //PFA_DebugPrint();

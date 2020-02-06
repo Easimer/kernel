@@ -297,8 +297,9 @@ static void GeneralProtectionFault(Registers* regs) {
 }
 
 static void PageFault(Registers* regs) {
-    u32 addr;
+    u32 addr, pd;
     asm volatile("movl %%cr2, %0" : "=r"(addr) :); // fetch the address that we tried to access
+    asm volatile("movl %%cr3, %0" : "=r"(pd) :); // get current page directory
     bool P = regs->err_code & 1;
     bool W = regs->err_code & 2;
     bool U = regs->err_code & 4;
@@ -312,7 +313,7 @@ static void PageFault(Registers* regs) {
         logprintf("EAX: %x EBX: %x ECX: %x EDX: %x\n", regs->eax, regs->ebx, regs->ecx, regs->edx);
         logprintf("ESI: %x EDI: %x EBP: %x ESP: %x\n", regs->esi, regs->edi, regs->ebp, regs->esp);
         logprintf("EIP: %x CS: %x EFLAGS: %x SS: %x\n", regs->eip, regs->cs, regs->eflags, regs->ss);
-        logprintf("ADDRESS: %x ERR: %c%c%c%c%c\n", addr, I ? 'I' : '-', R ? 'R' : '-', U ? 'U' : '-', W ? 'W' : 'R', P ? 'P' : '-');
+        logprintf("ADDRESS: %x ERR: %c%c%c%c%c CR3: %x\n", addr, I ? 'I' : '-', R ? 'R' : '-', U ? 'U' : '-', W ? 'W' : 'R', P ? 'P' : '-', pd);
         MM_PrintDiagnostic((void*)addr);
         logprintf("======================\n");
 
