@@ -255,10 +255,10 @@ void PFA_PostInit() {
     PFA_DebugPrint();
 }
 
-u32 PFA_Alloc(u32 program_id, u32 size) {
-    u32 ret = NULL;
-
+bool PFA_Alloc(u32 *addr, u32 program_id, u32 size) {
     ASSERT(size > 0);
+
+    *addr = NULL;
 
     if(size > 0) {
         ASSERT((size & 4095) == 0);
@@ -283,19 +283,18 @@ u32 PFA_Alloc(u32 program_id, u32 size) {
             region.type = program_id == 0 ? MRT_Kernel : MRT_Program;
             InsertRegion(region);
 
-            ret = region.addr_first;
+            *addr = region.addr_first;
         } else {
-            ASSERT(!"Out of memory");
+            logprintf("pfalloc: out of memory\n");
+            return false;
         }
     }
 
-    //PFA_DebugPrint();
-
-    return ret;
+    return true;
 }
 
-u32 PFA_Alloc(u32 size) {
-    return PFA_Alloc(0, size);
+bool PFA_Alloc(u32 *addr, u32 size) {
+    return PFA_Alloc(addr, 0, size);
 }
 
 void PFA_Free(u32 addr) {

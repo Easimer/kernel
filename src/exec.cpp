@@ -54,9 +54,15 @@ int Execute_Program(Volume_Handle volume, const char* path, int argc, const char
     File_Seek(fd, 0, whence_t::END);
     len = (u32)File_Tell(fd);
     mem_len = (len + 4095) & 0xFFFFF000;
-    // TODO: PFA_Alloc that signals error (NULL is a valid physical address)
-    program_memory = PFA_Alloc(mem_len + 4096);
-    stack_memory = PFA_Alloc(4096);
+
+    if(!PFA_Alloc(&program_memory, mem_len + 4096)) {
+        goto out_of_memory_pd;
+    }
+
+    if(!PFA_Alloc(&stack_memory, 4096)) {
+        goto out_of_memory_vm;
+    }
+
     logprintf("exec: len=%x mem_len=%x program memory: %xp stack: %xp\n", len, mem_len, program_memory, stack_memory);
     program = (void*)EXEC_START;
     // Map program memory

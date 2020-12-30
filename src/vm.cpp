@@ -101,7 +101,8 @@ bool MM_VirtualMap(void* vaddr, u32 physical) {
     // Map the page table
     if(!PD_IS_PRESENT(pd_entry)) {
         // Allocate frame for a new page table
-        u32 table_addr = PFA_Alloc(4096);
+        u32 table_addr;
+        PFA_Alloc(&table_addr, 4096);
         ASSERT((table_addr & 0xFFFFF000) == table_addr); // make sure table is 4K-aligned
         pd_entry = page_directory[pdi] = table_addr | PT_PRESENT | PT_READWRITE;
         asm volatile("mov %%cr3, %%eax\nmov %%eax, %%cr3\n":::"eax");
@@ -263,10 +264,14 @@ void MM_PrintDiagnostic(void* addr) {
 
 
 bool AllocatePageDirectory(u32* res) {
-    bool ret = false;
     ASSERT(res);
 
-    *res = PFA_Alloc(4096);
+    if(!PFA_Alloc(res, 4096)) {
+        return false;
+    }
+
+    bool ret = false;
+
     auto pd = (u32*)MM_VirtualMapKernel(*res);
     if(pd) {
         memset(pd, 0, 4096);
@@ -299,8 +304,10 @@ void* AllocateProgramMemory(u32 program_id, u32 pd, u32 size) {
         SwitchPageDirectory(pd);
     }
 
-    u32 phys = PFA_Alloc(program_id, size);
-    ret = MM_VirtualMapProgram(phys, (size + 4095) / 4096);
+    u32 phys;
+    if(PFA_Alloc(&phys, program_id, size)) {
+        ret = MM_VirtualMapProgram(phys, (size + 4095) / 4096);
+    }
 
     return ret;
 }
@@ -325,9 +332,10 @@ void* kmalloc(u32 size) {
 
     if(size > 0) {
         auto round_size = (size + 4096) & 0xFFFFF000;
-        logprintf("Allocating memory for %d bytes (real size will be %d)\n", size, round_size);
+        //logprintf("Allocating memory for %d bytes (real size will be %d)\n", size, round_size);
 
-        u32 phys = PFA_Alloc(round_size);
+        u32 phys;
+        PFA_Alloc(&phys, round_size);
         ret = MM_VirtualMapKernel(phys);
         if(ret == NULL) {
             PFA_Free(phys);
