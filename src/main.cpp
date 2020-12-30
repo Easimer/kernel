@@ -32,7 +32,6 @@ extern "C" void kmain(u32 magic, const MB2_Header* mb2) {
     MM_Init(); // TODO: move this back to line 26
 
     Interrupts_Setup();
-    Scheduler_Init();
     Timer_Setup();
 
     logprintf("Hello World!\n");
