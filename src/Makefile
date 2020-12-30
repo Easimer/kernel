@@ -39,7 +39,7 @@ grub/isoroot/boot/grub/grub.cfg: grub/create-grubcfg.sh
 .PHONY: clean run
 
 clean:
-	rm -rf $(KERNEL_FILENAME) $(KERNEL_OBJECTS) boot.iso grub/isoroot/
+	rm -rf $(KERNEL_FILENAME) $(KERNEL_OBJECTS) $(KERNEL_CRT) boot.iso grub/isoroot/
 
 run: boot.iso
 	qemu-system-i386 -cdrom boot.iso -m 64M -boot d -serial stdio $(QFLAGS)
