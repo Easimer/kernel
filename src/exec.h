@@ -9,5 +9,6 @@
 #define EXEC_ERR_NOMEM (-3)
 
 int Execute_Program(Volume_Handle volume, const char* path, int argc, const char** argv);
+void Spawn_Init();
 
 #endif /* KERNEL_EXEC_H */
