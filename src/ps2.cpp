@@ -10,11 +10,6 @@
 #define PORT_STATUS     (0x64)
 #define PORT_COMMAND    (0x64)
 
-#define SendCommand(b) outb(PORT_COMMAND, b)
-#define SendData(b) outb(PORT_DATA, b)
-#define ReadStatus() inb(PORT_STATUS)
-#define ReadData() inb(PORT_DATA)
-
 #define STM_OUT_STATUS  (0x01)
 #define STM_IN_STATUS   (0x02)
 #define STM_SYSFLAG     (0x04)
@@ -71,6 +66,22 @@ struct PS2_State {
 static PS2_State gPS2;
 
 void PS2_Initialize_MF2_Keyboard(u32 dev);
+
+static void SendCommand(u8 b) {
+    outb(PORT_COMMAND, b);
+}
+
+static void SendData(u8 b) {
+    outb(PORT_DATA, b);
+}
+
+static u8 ReadStatus() {
+    return inb(PORT_STATUS);
+}
+
+static u8 ReadData() {
+    return inb(PORT_DATA);
+}
 
 static bool SystemHasPS2() {
     // TODO: implement this
@@ -137,7 +148,7 @@ static control_reg_t ReadCfgByte() {
     SendCommand(0x20);
     while(!CanReadData());
     auto ret = control_reg_t(ReadData());
-    //logprintf("ps2: read cfg=%x\n", (u8)ret);
+    logprintf("ps2: read cfg=%x\n", (u8)ret);
     return ret;
 }
 
@@ -201,7 +212,11 @@ static bool DoSelfTest() {
         if(ReadDataWithTimeout(1000, &res)) {
             if(res == 0x55) {
                 ret = true;
+            } else {
+                logprintf("ps2: self test i=%d res=%x\n", i, res);
             }
+        } else {
+            logprintf("ps2: self test i=%d timed out\n", i);
         }
     }
 
@@ -256,6 +271,7 @@ void PS2_SendToDevice(u32 dev, u8 v) {
     }
     while(!CanSendData());
     SendData(v);
+    ReadStatus();
 }
 
 #define ResetDevice PS2_ResetDevice
@@ -263,45 +279,81 @@ bool PS2_ResetDevice(u32 dev) {
     SendToDevice(dev, 0xFF);
 
     while(!CanReadData());
-    return ReadData() == 0xFA;
+    auto res = ReadData();
+
+    if(res != 0xFA) {
+        logprintf("ps2: ResetDevice failed? rc=%x\n", res);
+    }
+
+    return res == 0xFA;
+}
+
+static bool DisableScanning(u32 dev) {
+    u8 res;
+
+    SendToDevice(dev, 0xF5);
+
+    // Recv response
+    if(!ReadDataWithTimeout(10000, &res)) {
+        logprintf("ps2: disable scanning command timed out on device %d\n", dev);
+        return false;
+    }
+
+    if(res != 0xFA) {
+        logprintf("ps2: disable scanning command failed on device %d with response %x\n", dev, res);
+        return false;
+    }
+
+    return true;
+}
+
+static void FlushDataBuffer() {
+    while(CanReadData()) ReadData();
 }
 
 static void DetermineDeviceType(u32 dev) {
     u8 res;
-    SendToDevice(dev, 0xF5); // disable scanning
+
+    FlushDataBuffer();
+
+    int cnt = 0;
+    while(true) {
+        logprintf("ps2: attempting to disable scanning for the %dth time\n", cnt);
+        if(!DisableScanning(dev)) {
+            logprintf("ps2: can't determine device %d type: disabling scanning has failed\n", dev);
+            cnt++;
+            continue;
+        }
+        break;
+    }
+
+    FlushDataBuffer();
+
+    SendToDevice(dev, 0xF2); // identify
     if(ReadDataWithTimeout(1000, &res)) {
         if(res == 0xFA) {
-            SendToDevice(dev, 0xF2); // identify
-            if(ReadDataWithTimeout(1000, &res)) {
-                if(res == 0xFA) {
-                    u8 ID[2] = {0, 0};
-                    bool timed_out = false;
+            u8 ID[2] = {0, 0};
+            bool timed_out = false;
 
-                    for(u32 i = 0; i < 2 && !timed_out; i++) {
-                        if(!ReadDataWithTimeout(1000, &ID[i])) {
-                            timed_out = true;
-                        }
-                    }
-                    logprintf("ps2: device %d identifies itself: {%x, %x}\n", dev, ID[0], ID[1]);
-
-                    if(ID[0] == 0x00) {
-                        gPS2.if_types[dev] = IF_Mouse;
-                    } else if(ID[0] == 0xAB && ID[1] == 0x83) {
-                        gPS2.if_types[dev] = IF_Keyboard;
-                    } else {
-                        gPS2.if_types[dev] = IF_None;
-                    }
-                } else {
-                    logprintf("ps2: can't determine device %d type: id cmd failed\n", dev);
+            for(u32 i = 0; i < 2 && !timed_out; i++) {
+                if(!ReadDataWithTimeout(1000, &ID[i])) {
+                    timed_out = true;
                 }
+            }
+            logprintf("ps2: device %d identifies itself: {%x, %x}\n", dev, ID[0], ID[1]);
+
+            if(ID[0] == 0x00) {
+                gPS2.if_types[dev] = IF_Mouse;
+            } else if(ID[0] == 0xAB && ID[1] == 0x83) {
+                gPS2.if_types[dev] = IF_Keyboard;
             } else {
-                logprintf("ps2: can't determine device %d type: id cmd timed out\n", dev);
+                gPS2.if_types[dev] = IF_None;
             }
         } else {
-            logprintf("ps2: can't determine device %d type: cmd failed\n", dev);
+            logprintf("ps2: can't determine device %d type: id cmd failed rc=%x\n", dev, res);
         }
     } else {
-        logprintf("ps2: can't determine device %d type: cmd timed out\n", dev);
+        logprintf("ps2: can't determine device %d type: id cmd timed out\n", dev);
     }
 }
 
